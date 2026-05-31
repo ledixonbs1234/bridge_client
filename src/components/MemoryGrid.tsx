@@ -20,6 +20,7 @@ export function MemoryGrid() {
   const [graphCode, setGraphCode] = useState<string>("");
   const [showGraph, setShowGraph] = useState<boolean>(true);
   const [consolidating, setConsolidating] = useState(false);
+  const [resolvingConflicts, setResolvingConflicts] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,6 +71,22 @@ export function MemoryGrid() {
       .finally(() => setConsolidating(false));
   };
 
+  const triggerResolveConflicts = () => {
+    if (!confirm("Bắt đầu tiến trình tự động đối chiếu và giải quyết xung đột kĩ thuật trong bộ nhớ?")) return;
+    setResolvingConflicts(true);
+    fetch("/api/dashboard/resolve-conflicts", { method: "POST" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Resolve API failed");
+        return res.json();
+      })
+      .then((data) => {
+        alert(data.message || "Đối chiếu và xử lý hoàn tất!");
+        loadMemories();
+      })
+      .catch((err) => alert("Lỗi đối chiếu xung đột: " + err.message))
+      .finally(() => setResolvingConflicts(false));
+  };
+
   if (error) {
     return (
       <div className="p-4 bg-red-950/20 border border-red-900/50 rounded-xl text-red-400 text-sm text-left font-mono">
@@ -96,19 +113,31 @@ export function MemoryGrid() {
           <h3 className="text-xs text-zinc-400 mb-1">Số lượng Vector nhúng</h3>
           <div className="text-2xl font-bold">{stats.embedded_count ?? 0}</div>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center justify-between text-left">
+
+        {/* WIDGET ĐIỀU KHIỂN FLUXMEM: Tích hợp 2 nút bấm xếp cột dọc */}
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center justify-between text-left col-span-1">
           <div>
-            <h3 className="text-xs text-zinc-400 mb-1">FluxMem Offline</h3>
-            <span className="text-[10px] text-zinc-500">Sleep-Time Consolidation</span>
+            <h3 className="text-xs text-zinc-400 mb-1">FluxMem Engine</h3>
+            <span className="text-[10px] text-zinc-500">Sleep-Time Optimization</span>
           </div>
-          <Button
-            onClick={triggerConsolidate}
-            disabled={consolidating}
-            variant="outline"
-            className="text-xs h-8 text-amber-400 border-amber-500/30"
-          >
-            {consolidating ? "Consolidating..." : "💤 Chưng cất"}
-          </Button>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <Button
+              onClick={triggerConsolidate}
+              disabled={consolidating || resolvingConflicts}
+              variant="outline"
+              className="text-[10px] h-7 px-2.5 text-amber-400 border-amber-500/30 font-semibold cursor-pointer"
+            >
+              {consolidating ? "Consolidating..." : "💤 Chưng cất"}
+            </Button>
+            <Button
+              onClick={triggerResolveConflicts}
+              disabled={resolvingConflicts || consolidating}
+              variant="outline"
+              className="text-[10px] h-7 px-2.5 text-blue-400 border-blue-500/30 font-semibold cursor-pointer"
+            >
+              {resolvingConflicts ? "Resolving..." : "⚖️ Đối chiếu"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -171,10 +200,10 @@ export function MemoryGrid() {
                     <td className="p-3 text-left">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.type === "procedural"
-                            ? "bg-amber-500/10 text-amber-400"
-                            : m.type === "semantic"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-blue-500/10 text-blue-400"
+                          ? "bg-amber-500/10 text-amber-400"
+                          : m.type === "semantic"
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "bg-blue-500/10 text-blue-400"
                           }`}
                       >
                         {m.type || "episodic"}
