@@ -1,5 +1,7 @@
+// bridge_client/src/components/MemoryGrid.tsx
 import { useEffect, useState } from "react";
 import { Button } from "./animate-ui/button";
+import { MermaidRenderer } from "./MermaidRenderer";
 
 interface Memory {
   id: number;
@@ -15,6 +17,8 @@ interface Memory {
 export function MemoryGrid() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [stats, setStats] = useState({ total: 0, avg_trust: 0, embedded_count: 0 });
+  const [graphCode, setGraphCode] = useState<string>("");
+  const [showGraph, setShowGraph] = useState<boolean>(true);
   const [consolidating, setConsolidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +27,7 @@ export function MemoryGrid() {
   }, []);
 
   const loadMemories = () => {
+    // 1. Tải bảng dữ liệu và thông số thống kê
     fetch("/api/dashboard/memories")
       .then((res) => {
         if (!res.ok) throw new Error("Lỗi API: " + res.status);
@@ -37,6 +42,16 @@ export function MemoryGrid() {
         console.error(err);
         setError(err.message);
       });
+
+    // 2. Tải mã đồ thị liên kết Mermaid
+    fetch("/api/dashboard/memories/graph")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.graph) {
+          setGraphCode(data.graph);
+        }
+      })
+      .catch((err) => console.error("Không thể tải sơ đồ đồ thị bộ nhớ:", err));
   };
 
   const triggerConsolidate = () => {
@@ -97,12 +112,41 @@ export function MemoryGrid() {
         </div>
       </div>
 
+      {/* ĐỒ THỊ TRỰC QUAN HÓA MERMAID */}
+      {graphCode && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden text-left p-4">
+          <div className="flex justify-between items-center border-b border-zinc-850 pb-2 mb-4">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+              <span>🧠</span> Bản đồ liên kết tri thức (FluxMem Graph Network)
+            </h3>
+            <button
+              onClick={() => setShowGraph(!showGraph)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              {showGraph ? "Ẩn sơ đồ [-]" : "Hiện sơ đồ [+]"}
+            </button>
+          </div>
+
+          {showGraph && (
+            <div className="bg-zinc-950/20 rounded-lg p-2 border border-zinc-800/40">
+              <MermaidRenderer code={graphCode} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* BẢNG BỘ NHỚ CHI TIẾT */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden text-left">
-        <div className="p-4 border-b border-zinc-800">
+        <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
           <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
             Memories List (Heterogeneous Layers)
           </h3>
+          <button
+            onClick={loadMemories}
+            className="text-xs text-blue-400 hover:underline"
+          >
+            Làm mới dữ liệu
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-zinc-300">
@@ -126,13 +170,12 @@ export function MemoryGrid() {
                     </td>
                     <td className="p-3 text-left">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          m.type === "procedural"
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.type === "procedural"
                             ? "bg-amber-500/10 text-amber-400"
                             : m.type === "semantic"
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : "bg-blue-500/10 text-blue-400"
-                        }`}
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-blue-500/10 text-blue-400"
+                          }`}
                       >
                         {m.type || "episodic"}
                       </span>
