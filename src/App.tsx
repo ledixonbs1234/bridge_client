@@ -4,8 +4,8 @@ import { WebTerminal } from "./components/WebTerminal";
 import { Telemetry } from "./components/Telemetry";
 import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
-
-type TabPanel = "terminal" | "telemetry" | "traces" | "memory";
+import { TelegramConfig } from "./components/TelegramConfig";
+type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabPanel>("terminal");
@@ -45,7 +45,10 @@ export default function App() {
     { id: "telemetry", label: "Telemetry", icon: "📊" },
     { id: "traces", label: "Traces", icon: "🔍" },
     { id: "memory", label: "FluxMem Memory", icon: "🧠" },
+    { id: "telegram", label: "Telegram Bot", icon: "✈️" }, // Bổ sung tab mới
   ];
+
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans antialiased">
@@ -90,9 +93,8 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative px-4 py-1.5 text-xs font-semibold rounded-md tracking-wide transition-colors ${
-                    isActive ? "text-zinc-50" : "text-zinc-400 hover:text-zinc-200"
-                  }`}
+                  className={`relative px-4 py-1.5 text-xs font-semibold rounded-md tracking-wide transition-colors ${isActive ? "text-zinc-50" : "text-zinc-400 hover:text-zinc-200"
+                    }`}
                 >
                   <span className="relative z-10 flex items-center gap-1.5">
                     <span>{tab.icon}</span>
@@ -125,6 +127,7 @@ export default function App() {
           {activeTab === "telemetry" && <Telemetry />}
           {activeTab === "traces" && <TraceViewer />}
           {activeTab === "memory" && <MemoryGrid />}
+          {activeTab === "telegram" && <TelegramConfig />} {/* Bổ sung dòng này */}
         </motion.div>
       </main>
     </div>
