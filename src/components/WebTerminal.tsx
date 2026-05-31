@@ -3,6 +3,7 @@ import { useSSE } from '@/hooks/useSSE';
 import { Button } from './animate-ui/button';
 import { motion } from 'motion/react';
 import { marked } from 'marked';
+import { MermaidRenderer } from './MermaidRenderer';
 
 interface SwitchProps {
   checked: boolean;
@@ -14,27 +15,118 @@ function Switch({ checked, onChange }: SwitchProps) {
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 ${
-        checked ? "bg-blue-600" : "bg-zinc-700"
-      }`}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 ${checked ? "bg-blue-600" : "bg-zinc-700"
+        }`}
     >
       <motion.span
         layout
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 ${
-          checked ? "translate-x-4.5" : "translate-x-0.5"
-        }`}
+        className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 ${checked ? "translate-x-4.5" : "translate-x-0.5"
+          }`}
       />
     </button>
   );
 }
 
+// Bộ phân giải bóc tách markdown và khối Mermaid
+function parseContentAndMermaid(content: string) {
+  const regex = /```mermaid\n([\s\S]*?)```/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(content)) !== null) {
+    const textBefore = content.substring(lastIndex, match.index);
+    if (textBefore.trim()) {
+      parts.push({ type: 'markdown', content: textBefore });
+    }
+    parts.push({ type: 'mermaid', content: match[1] });
+    lastIndex = regex.lastIndex;
+  }
+
+  const textAfter = content.substring(lastIndex);
+  if (textAfter.trim() || parts.length === 0) {
+    parts.push({ type: 'markdown', content: textAfter });
+  }
+
+  return parts;
+}
+
 export function WebTerminal() {
   const [input, setInput] = useState('');
   const [useReformulate, setUseReformulate] = useState(true);
-  const { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration } = useSSE();
+  const [pastedImage, setPastedImage] = useState<string | null>(null);
+
+  const { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setLogs } = useSSE();
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const lastValidatedMessageRef = useRef<string | null>(null);
+  const fixAttemptsRef = useRef<number>(0);
+
+  // Bộ giám sát và tự động bắt lỗi cú pháp Mermaid gửi về cho AI sửa
+  useEffect(() => {
+    if (!isGenerating && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === 'assistant' && lastMsg.content !== lastValidatedMessageRef.current) {
+        lastValidatedMessageRef.current = lastMsg.content;
+
+        // Trích xuất các sơ đồ Mermaid có trong tin nhắn
+        const regex = /```mermaid\n([\s\S]*?)```/g;
+        const blocks: string[] = [];
+        let match;
+        while ((match = regex.exec(lastMsg.content)) !== null) {
+          blocks.push(match[1]);
+        }
+
+        if (blocks.length > 0) {
+          const validateAll = async () => {
+            // Lazy import mermaid để chạy parser kiểm thử
+            const { default: mermaidInst } = await import('mermaid');
+            
+            for (let i = 0; i < blocks.length; i++) {
+              const block = blocks[i];
+              try {
+                await mermaidInst.parse(block);
+              } catch (err: any) {
+                console.warn("Phát hiện cú pháp Mermaid lỗi:", err);
+                const errMsg = err.message || String(err);
+                
+                // Giới hạn tối đa 2 lần thử sửa tự động cho cùng 1 bối cảnh để tránh lặp vô hạn
+                if (fixAttemptsRef.current < 2) {
+                  fixAttemptsRef.current += 1;
+                  
+                  setLogs((prev) => [...prev, {
+                    timestamp: new Date().toLocaleTimeString(),
+                    text: `⚠️ Phát hiện lỗi cú pháp Mermaid. Đang gửi báo cáo tự sửa lỗi (lần ${fixAttemptsRef.current}/2)...`,
+                    type: 'error'
+                  }]);
+
+                  const systemFeedback = `[HỆ THỐNG]: Sơ đồ Mermaid số ${i + 1} bạn vừa tạo bị lỗi cú pháp. Vui lòng sửa lại sơ đồ này.
+LỖI CHI TIẾT:
+${errMsg}
+
+MÃ NGUỒN GỐC GÂY LỖI:
+\`\`\`mermaid
+${block}
+\`\`\``;
+                  
+                  setTimeout(() => {
+                    sendPrompt(systemFeedback, false); // Gửi trực tiếp mà không cần qua Reformulator
+                  }, 1500);
+                }
+                break; 
+              }
+            }
+          };
+          validateAll();
+        } else {
+          // Reset số lần đếm nếu không phát hiện lỗi gì
+          fixAttemptsRef.current = 0;
+        }
+      }
+    }
+  }, [isGenerating, messages, sendPrompt, setLogs]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,15 +138,37 @@ export function WebTerminal() {
 
   const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault();
-    if (!input.trim() || isGenerating) return;
-    sendPrompt(input, useReformulate);
+    if ((!input.trim() && !pastedImage) || isGenerating) return;
+
+    sendPrompt(input, useReformulate, pastedImage);
     setInput('');
+    setPastedImage(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.result) {
+              setPastedImage(event.target.result as string);
+            }
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+          break;
+        }
+      }
     }
   };
 
@@ -72,29 +186,48 @@ export function WebTerminal() {
             messages.map((msg, idx) => (
               <div
                 key={idx}
-                className={`p-3.5 rounded-xl max-w-[85%] text-left text-sm transition-all ${
-                  msg.role === 'user'
+                className={`p-3.5 rounded-xl max-w-[85%] text-left text-sm transition-all ${msg.role === 'user'
                     ? 'bg-blue-600 text-white ml-auto shadow-sm'
                     : 'bg-zinc-800/60 border border-zinc-700/40 text-zinc-100 shadow-sm'
-                }`}
+                  }`}
               >
-                <div className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${
-                  msg.role === 'user' ? 'text-blue-200' : 'text-zinc-400'
-                }`}>
-                  {msg.role === 'user' ? 'User' : 'Agent'}
-                </div>
+                {msg.image && (
+                  <div className="mb-2">
+                    <img 
+                      src={msg.image} 
+                      alt="Uploaded visual representation" 
+                      className="max-h-48 rounded-lg border border-zinc-700/60 object-contain shadow-sm bg-zinc-950/20 p-0.5"
+                    />
+                  </div>
+                )}
+
                 {(() => {
                   const cleanContent = msg.content
                     .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
                     .trim();
-                  
-                  const htmlContent = marked.parse(cleanContent) as string;
+
+                  const parts = parseContentAndMermaid(cleanContent);
 
                   return (
-                    <div 
-                      className="markdown-body text-left leading-relaxed text-sm select-text" 
-                      dangerouslySetInnerHTML={{ __html: htmlContent }} 
-                    />
+                    <div className="space-y-3">
+                      {parts.map((part, partIdx) => {
+                        if (part.type === 'mermaid') {
+                          return (
+                            <div key={partIdx} className="my-2">
+                              <MermaidRenderer code={part.content} />
+                            </div>
+                          );
+                        }
+                        const htmlContent = marked.parse(part.content) as string;
+                        return (
+                          <div
+                            key={partIdx}
+                            className="markdown-body text-left leading-relaxed text-sm select-text"
+                            dangerouslySetInnerHTML={{ __html: htmlContent }}
+                          />
+                        );
+                      })}
+                    </div>
                   );
                 })()}
               </div>
@@ -103,7 +236,7 @@ export function WebTerminal() {
           <div ref={chatEndRef} />
         </div>
 
-        {/* HỘP THOẠI PHÊ DUYỆT (SHADCN WORKFLOW APPROVAL ALERT) */}
+        {/* HỘP THOẠI PHÊ DUYỆT */}
         {pendingPermission && (
           <div className="mt-4 p-4 bg-zinc-950/80 border border-amber-500/30 rounded-xl space-y-3 shadow-lg animate-pulse text-left">
             <div className="flex items-center gap-2 text-amber-500 font-bold text-xs">
@@ -118,25 +251,25 @@ export function WebTerminal() {
               </pre>
             )}
             <div className="flex gap-2 justify-end">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-red-400 border-red-500/20 hover:bg-red-950/20 text-[10px] h-8 px-2.5"
                 onClick={() => respondToPermission(pendingPermission.id, 'n')}
               >
                 Từ chối
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-blue-400 border-blue-500/20 hover:bg-blue-950/20 text-[10px] h-8 px-2.5"
                 onClick={() => respondToPermission(pendingPermission.id, 'y')}
               >
                 Đồng ý (Yes)
               </Button>
-              <Button 
-                variant="default" 
-                size="sm" 
+              <Button
+                variant="default"
+                size="sm"
                 className="text-[10px] h-8 px-2.5 bg-blue-600 hover:bg-blue-700"
                 onClick={() => respondToPermission(pendingPermission.id, 'a')}
               >
@@ -155,11 +288,30 @@ export function WebTerminal() {
             </span>
           </div>
 
+          {pastedImage && (
+            <div className="relative inline-block mb-3 group animate-fade-in">
+              <img
+                src={pastedImage}
+                alt="Pasted Thumbnail"
+                className="max-h-24 max-w-[200px] rounded-lg border border-zinc-700 shadow-md object-contain bg-zinc-950/40 p-1"
+              />
+              <button
+                type="button"
+                onClick={() => setPastedImage(null)}
+                className="absolute -top-1.5 -right-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md transition-all cursor-pointer"
+                title="Xóa hình ảnh"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2.5 items-end bg-zinc-950/60 border border-zinc-800 rounded-lg p-2 focus-within:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-700 transition-all">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               spellCheck={false}
               autoCorrect="off"
               autoCapitalize="off"
@@ -194,15 +346,14 @@ export function WebTerminal() {
             logs.map((log, idx) => (
               <div
                 key={idx}
-                className={`p-2 rounded-lg border leading-relaxed ${
-                  log.type === 'tool-call'
+                className={`p-2 rounded-lg border leading-relaxed ${log.type === 'tool-call'
                     ? 'bg-blue-950/10 border-blue-900/30 text-blue-300'
                     : log.type === 'tool-output'
-                    ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300'
-                    : log.type === 'error'
-                    ? 'bg-red-950/10 border-red-900/30 text-red-400'
-                    : 'bg-zinc-900/30 border-zinc-850 text-zinc-400'
-                }`}
+                      ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300'
+                      : log.type === 'error'
+                        ? 'bg-red-950/10 border-red-900/30 text-red-400'
+                        : 'bg-zinc-900/30 border-zinc-850 text-zinc-400'
+                  }`}
               >
                 <span className="text-zinc-600 mr-2">[{log.timestamp}]</span>
                 <span className="whitespace-pre-wrap">{log.text}</span>

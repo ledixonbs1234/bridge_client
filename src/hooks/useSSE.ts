@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  image?: string; // Chứa dữ liệu ảnh dạng Base64
 }
 
 export interface LogEntry {
@@ -33,10 +34,11 @@ export function useSSE() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.active && data.messages) {
-          // Khôi phục lịch sử chat thô sạch từ backend
+          // KHẮC PHỤC LỖI: Giữ lại thuộc tính m.image nếu có trong tệp lưu trữ
           const loadedMessages: ChatMessage[] = data.messages.map((m: any) => ({
             role: m.role,
-            content: m.content
+            content: m.content,
+            image: m.image || undefined // Khôi phục ảnh Base64
           }));
           setMessages(loadedMessages);
           
@@ -60,18 +62,20 @@ export function useSSE() {
     loadActiveSession();
   }, [loadActiveSession]);
 
-  const sendPrompt = useCallback(async (prompt: string, useReformulate: boolean) => {
+  const sendPrompt = useCallback(async (prompt: string, useReformulate: boolean, image?: string | null) => {
     setIsGenerating(true);
     setPendingPermission(null);
     abortControllerRef.current = new AbortController();
 
-    setMessages((prev) => [...prev, { role: 'user', content: prompt }]);
+    // Lưu tin nhắn kèm theo ảnh vào lịch sử chat hiển thị trên UI
+    setMessages((prev) => [...prev, { role: 'user', content: prompt, image: image || undefined }]);
 
     try {
       const response = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, stream: true, useReformulate }),
+        // Gửi kèm thuộc tính image trong payload
+        body: JSON.stringify({ message: prompt, stream: true, useReformulate, image }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -133,7 +137,8 @@ export function useSSE() {
               if (parsed.history) {
                 setMessages(parsed.history.map((m: any) => ({
                   role: m.role,
-                  content: m.content
+                  content: m.content,
+                  image: m.image || undefined // Khôi phục ảnh Base64 từ lịch sử mới đồng bộ
                 })));
               }
               setLogs((prev) => [...prev, {
