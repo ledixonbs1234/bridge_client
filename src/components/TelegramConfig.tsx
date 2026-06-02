@@ -1,4 +1,3 @@
-// ridge_client/src/components/TelegramConfig.tsx
 import { useState, useEffect } from "react";
 import { Button } from "./animate-ui/button";
 
@@ -64,7 +63,7 @@ export function TelegramConfig() {
             .then((data) => {
                 if (data.success) {
                     setMessage({ text: data.message || "Đã lưu cấu hình thành công!", type: "success" });
-                    fetchConfig(); // Tải lại để hiển thị Token đã bị ẩn
+                    fetchConfig();
                 } else {
                     throw new Error(data.error || "Gặp lỗi khi lưu");
                 }
@@ -95,128 +94,128 @@ export function TelegramConfig() {
     };
 
     if (loading) {
-        return <div className="text-zinc-400 text-sm text-left">Đang tải cấu hình Telegram Bot...</div>;
+        return <div className="text-zinc-500 text-sm text-left">Đang tải cấu hình Telegram Bot...</div>;
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
-            {/* CỘT TRÁI: FORM CẤU HÌNH */}
-            <form onSubmit={handleSave} className="lg:col-span-7 bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-6 shadow-md">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left text-zinc-800">
+            {/* LEFT COLUMN: SETTING FORM */}
+            <form onSubmit={handleSave} className="lg:col-span-7 bg-zinc-50 border border-zinc-200 p-6 rounded-xl space-y-6 shadow-xs">
                 <div>
-                    <h2 className="text-sm font-bold text-zinc-200 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-1 flex items-center gap-2">
                         <span>✈️</span> Thiết lập Telegram Bot Notifications
                     </h2>
-                    <p className="text-xs text-zinc-500">Tự động nhận thông báo trạng thái hoặc phản hồi cấp quyền trực tiếp qua Telegram.</p>
+                    <p className="text-xs text-zinc-500 font-medium">Tự động nhận thông báo trạng thái hoặc phản hồi cấp quyền trực tiếp qua Telegram.</p>
                 </div>
 
-                {/* TRẠNG THÁI KÍCH HOẠT */}
-                <div className="flex items-center justify-between p-3.5 bg-zinc-950/40 border border-zinc-850 rounded-lg select-none">
+                {/* ENABLE TOGGLE SWITCH */}
+                <div className="flex items-center justify-between p-3.5 bg-white border border-zinc-200 rounded-lg select-none">
                     <div>
-                        <label className="text-xs font-semibold text-zinc-300 block">Kích hoạt thông báo</label>
-                        <span className="text-[10px] text-zinc-500">Bật/tắt toàn bộ tiến trình gửi tin nhắn qua Bot Telegram.</span>
+                        <label className="text-xs font-semibold text-zinc-800 block">Kích hoạt thông báo</label>
+                        <span className="text-[10px] text-zinc-500 font-medium">Bật/tắt toàn bộ tiến trình gửi tin nhắn qua Bot Telegram.</span>
                     </div>
                     <input
                         type="checkbox"
                         checked={config.enabled}
                         onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
-                        className="w-4 h-4 text-blue-600 bg-zinc-800 border-zinc-700 rounded focus:ring-blue-500 focus:ring-offset-zinc-900 cursor-pointer"
+                        className="w-4 h-4 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 focus:ring-offset-white cursor-pointer"
                     />
                 </div>
 
-                {/* INPUTS CHÍNH */}
+                {/* MAIN FIELD INPUTS */}
                 <div className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-400">Telegram Bot Token</label>
+                        <label className="text-xs font-semibold text-zinc-600">Telegram Bot Token</label>
                         <input
                             type="text"
                             value={config.botToken}
                             onChange={(e) => setConfig({ ...config, botToken: e.target.value })}
                             placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
-                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-600 focus:border-zinc-700 outline-none font-mono"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-300 focus:ring-1 focus:ring-zinc-200/50 outline-none font-mono shadow-xs"
                         />
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-400">Chat ID (Nhóm hoặc Cá nhân)</label>
+                        <label className="text-xs font-semibold text-zinc-600">Chat ID (Nhóm hoặc Cá nhân)</label>
                         <input
                             type="text"
                             value={config.chatId}
                             onChange={(e) => setConfig({ ...config, chatId: e.target.value })}
                             placeholder="-100123456789 (Nhóm) hoặc 987654321 (Cá nhân)"
-                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-600 focus:border-zinc-700 outline-none font-mono"
+                            className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 placeholder-zinc-400 focus:border-zinc-300 focus:ring-1 focus:ring-zinc-200/50 outline-none font-mono shadow-xs"
                         />
                     </div>
                 </div>
 
-                {/* DANH SÁCH SỰ KIỆN NHẬN THÔNG BÁO */}
-                <div className="space-y-3.5 border-t border-zinc-850 pt-4">
-                    <h3 className="text-xs font-bold text-zinc-400">Các sự kiện cần gửi thông báo:</h3>
+                {/* NOTIFICATION EVENT CONFIG */}
+                <div className="space-y-3.5 border-t border-zinc-200 pt-4">
+                    <h3 className="text-xs font-bold text-zinc-500">Các sự kiện cần gửi thông báo:</h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="flex items-start gap-2.5 p-2 bg-zinc-950/20 border border-zinc-850/50 rounded-lg">
+                        <div className="flex items-start gap-2.5 p-2.5 bg-white border border-zinc-200 rounded-lg">
                             <input
                                 id="tg_evt_perm"
                                 type="checkbox"
                                 checked={config.notifyOnPermission}
                                 onChange={(e) => setConfig({ ...config, notifyOnPermission: e.target.checked })}
-                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-zinc-800 border-zinc-700 rounded focus:ring-blue-500 focus:ring-offset-zinc-900 cursor-pointer"
+                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 focus:ring-offset-white cursor-pointer"
                             />
-                            <label htmlFor="tg_evt_perm" className="text-xs text-zinc-300 cursor-pointer">
-                                <b>Yêu cầu phê duyệt (Permission)</b>
+                            <label htmlFor="tg_evt_perm" className="text-xs text-zinc-700 cursor-pointer select-none">
+                                <b className="text-zinc-800 font-semibold">Yêu cầu phê duyệt (Permission)</b>
                                 <span className="text-[10px] text-zinc-500 block mt-0.5">Thông báo khi Agent cần bạn phê duyệt lệnh hoặc sửa file.</span>
                             </label>
                         </div>
 
-                        <div className="flex items-start gap-2.5 p-2 bg-zinc-950/20 border border-zinc-850/50 rounded-lg">
+                        <div className="flex items-start gap-2.5 p-2.5 bg-white border border-zinc-200 rounded-lg">
                             <input
                                 id="tg_evt_start"
                                 type="checkbox"
                                 checked={config.notifyOnPipelineStart}
                                 onChange={(e) => setConfig({ ...config, notifyOnPipelineStart: e.target.checked })}
-                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-zinc-800 border-zinc-700 rounded focus:ring-blue-500 focus:ring-offset-zinc-900 cursor-pointer"
+                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 focus:ring-offset-white cursor-pointer"
                             />
-                            <label htmlFor="tg_evt_start" className="text-xs text-zinc-300 cursor-pointer">
-                                <b>Bắt đầu Pipeline</b>
+                            <label htmlFor="tg_evt_start" className="text-xs text-zinc-700 cursor-pointer select-none">
+                                <b className="text-zinc-800 font-semibold">Bắt đầu Pipeline</b>
                                 <span className="text-[10px] text-zinc-500 block mt-0.5">Nhận tin nhắn cảnh báo khi một Pipeline mới bắt đầu chạy.</span>
                             </label>
                         </div>
 
-                        <div className="flex items-start gap-2.5 p-2 bg-zinc-950/20 border border-zinc-850/50 rounded-lg">
+                        <div className="flex items-start gap-2.5 p-2.5 bg-white border border-zinc-200 rounded-lg">
                             <input
                                 id="tg_evt_success"
                                 type="checkbox"
                                 checked={config.notifyOnPipelineSuccess}
                                 onChange={(e) => setConfig({ ...config, notifyOnPipelineSuccess: e.target.checked })}
-                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-zinc-800 border-zinc-700 rounded focus:ring-blue-500 focus:ring-offset-zinc-900 cursor-pointer"
+                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 focus:ring-offset-white cursor-pointer"
                             />
-                            <label htmlFor="tg_evt_success" className="text-xs text-zinc-300 cursor-pointer">
-                                <b>Pipeline thành công (Success)</b>
+                            <label htmlFor="tg_evt_success" className="text-xs text-zinc-700 cursor-pointer select-none">
+                                <b className="text-zinc-800 font-semibold">Pipeline thành công (Success)</b>
                                 <span className="text-[10px] text-zinc-500 block mt-0.5">Cập nhật tin tức tự động khi các giai đoạn hoàn thành xuất sắc.</span>
                             </label>
                         </div>
 
-                        <div className="flex items-start gap-2.5 p-2 bg-zinc-950/20 border border-zinc-850/50 rounded-lg">
+                        <div className="flex items-start gap-2.5 p-2.5 bg-white border border-zinc-200 rounded-lg">
                             <input
                                 id="tg_evt_fail"
                                 type="checkbox"
                                 checked={config.notifyOnPipelineFailure}
                                 onChange={(e) => setConfig({ ...config, notifyOnPipelineFailure: e.target.checked })}
-                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-zinc-800 border-zinc-700 rounded focus:ring-blue-500 focus:ring-offset-zinc-900 cursor-pointer"
+                                className="mt-0.5 w-3.5 h-3.5 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 focus:ring-offset-white cursor-pointer"
                             />
-                            <label htmlFor="tg_evt_fail" className="text-xs text-zinc-300 cursor-pointer">
-                                <b>Pipeline thất bại (Failure)</b>
+                            <label htmlFor="tg_evt_fail" className="text-xs text-zinc-700 cursor-pointer select-none">
+                                <b className="text-zinc-800 font-semibold">Pipeline thất bại (Failure)</b>
                                 <span className="text-[10px] text-zinc-500 block mt-0.5">Nhận tin khẩn cấp khi hệ thống dừng hoặc step gặp lỗi.</span>
                             </label>
                         </div>
                     </div>
                 </div>
 
-                {/* FEEDBACK STATUS */}
+                {/* ACTION FEEDBACK ALERT */}
                 {message && (
                     <div
                         className={`p-3 rounded-lg text-xs font-mono font-medium ${message.type === "success"
-                            ? "bg-emerald-950/30 border border-emerald-900/40 text-emerald-400"
-                            : "bg-red-950/30 border border-red-900/40 text-red-400"
+                            ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                            : "bg-red-55 border border-red-200 text-red-700"
                             }`}
                     >
                         {message.type === "success" ? "✓ " : "✗ "} {message.text}
@@ -224,13 +223,13 @@ export function TelegramConfig() {
                 )}
 
                 {/* ACTION BUTTONS */}
-                <div className="flex justify-between items-center border-t border-zinc-850 pt-4">
+                <div className="flex justify-between items-center border-t border-zinc-200/60 pt-4">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={handleTestNotification}
                         disabled={testing || saving || !config.enabled}
-                        className="text-xs font-semibold text-zinc-300 cursor-pointer h-9"
+                        className="text-xs font-semibold text-zinc-600 border-zinc-200 hover:bg-zinc-100 cursor-pointer h-9"
                     >
                         {testing ? "Đang gửi..." : "🔔 Thử nghiệm gửi"}
                     </Button>
@@ -246,33 +245,48 @@ export function TelegramConfig() {
                 </div>
             </form>
 
-            {/* CỘT PHẢI: HƯỚNG DẪN CHI TIẾT */}
+            {/* RIGHT COLUMN: MANUAL STEPPER */}
             <div className="lg:col-span-5 space-y-6">
-                <div className="bg-zinc-900/40 border border-zinc-800/80 p-5 rounded-xl space-y-4">
-                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                <div className="bg-zinc-50 border border-zinc-200 p-5 rounded-xl space-y-4 shadow-xs">
+                    <h3 className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-2">
                         <span>📖</span> Hướng dẫn tạo & liên kết Telegram Bot
                     </h3>
 
-                    <ol className="list-decimal pl-4 text-xs text-zinc-400 space-y-3.5">
-                        <li>
-                            <b className="text-zinc-200">Tạo Bot Telegram mới:</b>
-                            <p className="mt-0.5">Mở Telegram, tìm kiếm tài khoản chính thức <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-mono">@BotFather</a>. Gửi lệnh <code className="text-red-400 font-mono">/newbot</code> và làm theo hướng dẫn để nhận <b className="text-zinc-300">HTTP API Token</b>.</p>
+                    <ol className="list-none pl-0 text-xs text-zinc-500 space-y-4">
+                        <li className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                            <div>
+                                <b className="text-zinc-800 font-semibold">Tạo Bot Telegram mới:</b>
+                                <p className="mt-1 leading-relaxed">Tìm kiếm tài khoản chính thức <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-mono hover:text-blue-500">@BotFather</a> trên ứng dụng Telegram. Gửi lệnh <code className="text-red-600 font-mono bg-zinc-100 px-1 py-0.5 rounded border border-zinc-200">/newbot</code> và làm theo các chỉ thị để nhận <b className="text-zinc-700">HTTP API Token</b>.</p>
+                            </div>
                         </li>
-                        <li>
-                            <b className="text-zinc-200">Kích hoạt cuộc hội thoại:</b>
-                            <p className="mt-0.5">Nhấp vào link bot của bạn (ví dụ: <code className="text-zinc-300 font-mono">t.me/your_bot</code>) và nhấn nút <b className="text-zinc-300">START</b> để mở luồng giao tiếp.</p>
+                        <li className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                            <div>
+                                <b className="text-zinc-800 font-semibold">Kích hoạt hội thoại:</b>
+                                <p className="mt-1 leading-relaxed">Nhấp vào liên kết bot của bạn vừa được tạo và nhấn nút <b className="text-zinc-700">START</b> để mở luồng giao tiếp ban đầu.</p>
+                            </div>
                         </li>
-                        <li>
-                            <b className="text-zinc-200">Trích xuất Chat ID của bạn:</b>
-                            <p className="mt-0.5">Dò tìm tài khoản bot <a href="https://t.me/GetChatID_Bot" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-mono">@GetChatID_Bot</a> hoặc gửi tin nhắn bất kỳ tới <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-mono">@userinfobot</a> để lấy ID cá nhân của bạn (Chuỗi số nguyên dương).</p>
+                        <li className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                            <div>
+                                <b className="text-zinc-800 font-semibold">Trích xuất Chat ID:</b>
+                                <p className="mt-1 leading-relaxed">Dò tìm tài khoản bot <a href="https://t.me/GetChatID_Bot" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-mono hover:text-blue-500">@GetChatID_Bot</a> hoặc gửi một tin nhắn bất kỳ tới <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-mono hover:text-blue-500">@userinfobot</a> để lấy mã ID cá nhân của bạn (chuỗi số nguyên dương).</p>
+                            </div>
                         </li>
-                        <li>
-                            <b className="text-zinc-200">Liên kết nhóm (Tùy chọn):</b>
-                            <p className="mt-0.5">Nếu muốn nhận tin nhắn trong nhóm, hãy thêm bot của bạn vào nhóm đó với quyền quản trị viên, sau đó lấy Chat ID của nhóm (Thường bắt đầu bằng dấu trừ, ví dụ: <code className="text-zinc-300 font-mono">-100...</code>).</p>
+                        <li className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">4</span>
+                            <div>
+                                <b className="text-zinc-800 font-semibold">Liên kết nhóm (Tùy chọn):</b>
+                                <p className="mt-1 leading-relaxed">Nếu muốn nhận tin trong nhóm chung, hãy thêm bot của bạn vào nhóm đó với quyền quản trị viên, sau đó lấy Chat ID của nhóm (chuỗi số bắt đầu bằng dấu trừ, ví dụ: <code className="text-zinc-700 font-mono bg-zinc-100 px-1 py-0.5 rounded border border-zinc-200">-100...</code>).</p>
+                            </div>
                         </li>
-                        <li>
-                            <b className="text-zinc-200">Kích hoạt & Lưu:</b>
-                            <p className="mt-0.5">Dán thông tin API Token và Chat ID vào các ô bên trái, tích chọn sự kiện, nhấn <b className="text-zinc-300">Lưu cấu hình</b> và nhấn nút <b className="text-zinc-300">Thử nghiệm gửi</b> để xác nhận.</p>
+                        <li className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">5</span>
+                            <div>
+                                <b className="text-zinc-800 font-semibold">Đồng bộ & Kiểm tra:</b>
+                                <p className="mt-1 leading-relaxed">Dán Token và Chat ID vào khung thiết lập bên trái, nhấn <b className="text-zinc-700">Lưu cấu hình</b> và thử nghiệm gửi để xác nhận liên kết hoạt động tốt.</p>
+                            </div>
                         </li>
                     </ol>
                 </div>

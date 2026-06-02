@@ -1,20 +1,103 @@
 import { useState, useEffect } from "react";
-import { motion, LayoutGroup } from "motion/react";
+import { useSSE } from "./hooks/useSSE";
 import { WebTerminal } from "./components/WebTerminal";
 import { Telemetry } from "./components/Telemetry";
 import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
 import { TelegramConfig } from "./components/TelegramConfig";
+
 type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram";
+
+export interface WorkspaceData {
+  success: boolean;
+  provider: {
+    key: string;
+    name: string;
+    model: string;
+  };
+  agents: Array<{
+    id: string;
+    name: string;
+    type: string;
+    provider: string;
+    model: string;
+    tools: string[];
+    toolCalls: any[];
+    status: {
+      state: "idle" | "running" | "waiting" | "thinking";
+      currentTask?: string;
+      progress: number;
+      lastUpdate: number;
+    };
+  }>;
+  pipeline: {
+    pipeline_name: string;
+    status: "PENDING" | "IN_PROGRESS" | "DONE" | "FAILED";
+    stages: Array<{
+      name: string;
+      status: string;
+      steps: Array<{
+        step_key: string;
+        task: string;
+        tool: string;
+        parallel_group: string | null;
+        depends_on: string[];
+      }>;
+    }>;
+  } | null;
+  states: Array<{
+    step_key: string;
+    state: "PENDING" | "QUEUED" | "RUNNING" | "VALIDATING" | "DONE" | "FAILED" | "BLOCKED";
+    retry_count: number;
+    error_history: string;
+    updated_at: string;
+    summary?: string;
+  }>;
+  activeTask?: {
+    step_key: string;
+    description: string;
+  };
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabPanel>("terminal");
   const [goal, setGoal] = useState<string | null>(null);
 
+  const [activeAgent, setActiveAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
+  const [activeModel, setActiveModel] = useState<string>("MiniMax-M3");
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  // Live real-time workspace state
+  const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null);
+
+  const sse = useSSE(() => {
+    setReloadTrigger((prev) => prev + 1);
+    fetchWorkspace();
+  });
+
+  const fetchWorkspace = () => {
+    fetch("/api/dashboard/active-workspace")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setWorkspaceData(data);
+          if (data.provider) {
+            setActiveModel(data.provider.model);
+          }
+        }
+      })
+      .catch((err) => console.error("Error reading active workspace state:", err));
+  };
+
   useEffect(() => {
     fetch("/api/dashboard/sessions")
       .then((res) => res.json())
       .then((data) => setGoal(data.currentGoal || null));
+
+    fetchWorkspace();
+
+    const interval = setInterval(fetchWorkspace, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleEditGoal = () => {
@@ -26,7 +109,10 @@ export default function App() {
       body: JSON.stringify({ goal: nextGoal }),
     })
       .then((res) => res.json())
-      .then((data) => setGoal(data.goal));
+      .then((data) => {
+        setGoal(data.goal);
+        fetchWorkspace();
+      });
   };
 
   const handleClearGoal = () => {
@@ -37,98 +123,179 @@ export default function App() {
       body: JSON.stringify({ goal: null }),
     })
       .then((res) => res.json())
-      .then(() => setGoal(null));
+      .then(() => {
+        setGoal(null);
+        fetchWorkspace();
+      });
   };
 
-  const tabs: { id: TabPanel; label: string; icon: string }[] = [
-    { id: "terminal", label: "Web Terminal", icon: "💬" },
-    { id: "telemetry", label: "Telemetry", icon: "📊" },
-    { id: "traces", label: "Traces", icon: "🔍" },
-    { id: "memory", label: "FluxMem Memory", icon: "🧠" },
-    { id: "telegram", label: "Telegram Bot", icon: "✈️" }, // Bổ sung tab mới
-  ];
-
-
-
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans antialiased">
-      {/* HEADER BAR (SHADCN GLASS THEME) */}
-      <header className="px-8 py-4 border-b border-zinc-800 bg-zinc-950/60 backdrop-blur-md sticky top-0 z-50 flex justify-between items-center">
-        <div>
-          <h1 className="text-base font-bold text-zinc-50 flex items-center gap-2">
-            <span>⚡</span> Bridge Server Dashboard
-          </h1>
-          <p className="text-[10px] text-zinc-500 font-medium mt-0.5">Autonomous Agent Intelligence Layer</p>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-2.5 py-1 rounded-full">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-          </span>
-          Online
-        </div>
-      </header>
-
-      {/* TARGET GOAL BAR (SHADCN ALERT STYLE) */}
-      {goal && (
-        <div className="mx-8 mt-5 p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-lg flex justify-between items-center text-xs animate-fade-in">
-          <div className="flex items-center gap-2 text-left">
-            <span className="text-amber-500 font-bold tracking-wider">🎯 TARGET GOAL:</span>
-            <span className="text-zinc-300 font-medium leading-relaxed">{goal}</span>
+    <div className="min-h-screen bg-white text-zinc-800 flex font-sans antialiased overflow-hidden h-screen select-none">
+      {/* PERSISTENT LIGHT SIDEBAR */}
+      <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700">
+        <div className="p-4 space-y-6">
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-blue-600 font-bold text-lg animate-pulse">⚡</span>
+            <div>
+              <h1 className="text-xs font-bold text-zinc-900 tracking-wide uppercase">Bridge Server</h1>
+              <p className="text-[9px] text-zinc-400 font-medium">Intelligence Layer</p>
+            </div>
           </div>
-          <div className="flex gap-3 text-[11px] font-bold shrink-0 ml-4">
-            <button onClick={handleEditGoal} className="text-zinc-400 hover:text-amber-400 transition-colors">Sửa</button>
-            <button onClick={handleClearGoal} className="text-zinc-500 hover:text-red-400 transition-colors">Xóa</button>
-          </div>
-        </div>
-      )}
 
-      {/* SHADCN TAB LIST STYLE */}
-      <div className="px-8 mt-6 flex justify-start">
-        <div className="flex bg-zinc-900/60 border border-zinc-800 p-1 rounded-lg gap-1">
-          <LayoutGroup>
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`relative px-4 py-1.5 text-xs font-semibold rounded-md tracking-wide transition-colors ${isActive ? "text-zinc-50" : "text-zinc-400 hover:text-zinc-200"
-                    }`}
-                >
-                  <span className="relative z-10 flex items-center gap-1.5">
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                  </span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="active-tab-glow"
-                      className="absolute inset-0 bg-zinc-800 rounded-md shadow-sm"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
+          <button
+            onClick={() => {
+              setActiveTab("terminal");
+            }}
+            className="flex items-center justify-center gap-2 w-full border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
+          >
+            <span className="text-sm font-bold">+</span> New task
+          </button>
+
+          <nav className="space-y-1">
+            <button
+              onClick={() => setActiveTab("traces")}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                }`}
+            >
+              <span className="text-sm">🔍</span> Search
+            </button>
+            <button
+              onClick={() => setActiveTab("telemetry")}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telemetry" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                }`}
+            >
+              <span className="text-sm">📊</span> Skills
+            </button>
+            <button
+              onClick={() => setActiveTab("terminal")}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                }`}
+            >
+              <span className="text-sm">📅</span> Scheduled
+            </button>
+            <button
+              onClick={() => setActiveTab("memory")}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "memory" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                }`}
+            >
+              <span className="text-sm">🧠</span> Assets
+            </button>
+            <button
+              onClick={() => setActiveTab("telegram")}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telegram" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                }`}
+            >
+              <span className="text-sm">✈️</span> Connect Mobile
+            </button>
+          </nav>
+
+          {/* MORE SECTION */}
+          <div className="space-y-1.5">
+            <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">More</span>
+            <div className="space-y-1">
+              <button
+                onClick={() => {
+                  setActiveAgent("MaxHermes");
+                  setActiveTab("terminal");
+                }}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-left rounded-lg transition-colors cursor-pointer ${activeAgent === "MaxHermes" && activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-bold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                  }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#5046e5]" />
+                <span>MaxHermes</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveAgent("MaxClaw");
+                  setActiveTab("terminal");
+                }}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-left rounded-lg transition-colors cursor-pointer ${activeAgent === "MaxClaw" && activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-bold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                  }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-[#8b5cf6]" />
+                <span>MaxClaw</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Current Goal</span>
+            <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
+              <p className="text-[11px] text-zinc-700 leading-normal line-clamp-3 select-text font-medium">
+                {goal || "Chưa thiết lập mục tiêu hiện tại."}
+              </p>
+              <div className="flex gap-1.5 pt-1">
+                <button onClick={handleEditGoal} className="text-[9px] text-blue-600 hover:text-blue-500 font-bold cursor-pointer">
+                  Sửa
                 </button>
-              );
-            })}
-          </LayoutGroup>
+                {goal && (
+                  <button onClick={handleClearGoal} className="text-[9px] text-red-600 hover:text-red-500 font-bold cursor-pointer">
+                    Xóa
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* MAIN CONTAINER */}
-      <main className="flex-1 p-8 overflow-hidden max-w-7xl mx-auto w-full">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="h-full"
-        >
-          {activeTab === "terminal" && <WebTerminal />}
-          {activeTab === "telemetry" && <Telemetry />}
-          {activeTab === "traces" && <TraceViewer />}
-          {activeTab === "memory" && <MemoryGrid />}
-          {activeTab === "telegram" && <TelegramConfig />} {/* Bổ sung dòng này */}
-        </motion.div>
+        <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold text-xs border border-blue-500/10">
+              XL
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-bold text-zinc-800 leading-none">Xơn Lê</p>
+              <p className="text-[10px] text-zinc-400 font-medium mt-1">Administrator</p>
+            </div>
+          </div>
+          <button title="Download logs" className="text-zinc-400 hover:text-zinc-700 cursor-pointer p-1">
+            📥
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTAINER WORKSPACE */}
+      <main className="flex-1 flex flex-col bg-white overflow-hidden h-full relative">
+        {activeTab === "terminal" ? (
+          <WebTerminal
+            activeAgent={activeAgent}
+            activeModel={activeModel}
+            setActiveModel={setActiveModel}
+            sse={sse}
+            workspaceData={workspaceData}
+          />
+        ) : (
+          <div className="flex-1 bg-white text-zinc-800 p-8 overflow-y-auto select-text border-l border-zinc-200">
+            <div className="max-w-6xl mx-auto space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-4 select-none">
+                <div>
+                  <h2 className="text-lg font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-2">
+                    <span>⚡</span>{" "}
+                    {activeTab === "telemetry"
+                      ? "Telemetry Report"
+                      : activeTab === "traces"
+                        ? "Trace Viewer"
+                        : activeTab === "memory"
+                          ? "FluxMem Layer"
+                          : "Telegram Config"}
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("terminal")}
+                  className="text-xs text-blue-600 hover:underline cursor-pointer"
+                >
+                  ← Trở lại khung Chat
+                </button>
+              </div>
+
+              {activeTab === "telemetry" && <Telemetry reloadTrigger={reloadTrigger} />}
+              {activeTab === "traces" && <TraceViewer reloadTrigger={reloadTrigger} />}
+              {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} />}
+              {activeTab === "telegram" && <TelegramConfig />}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

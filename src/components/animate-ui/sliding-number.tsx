@@ -13,7 +13,7 @@ export function SlidingNumber({ value }: SlidingNumberProps) {
   }, [value]);
 
   return (
-    <div className="flex overflow-hidden font-mono text-3xl font-bold text-blue-400">
+    <div className="flex overflow-hidden font-mono text-3xl font-bold text-blue-600">
       <AnimatePresence mode="popLayout">
         {digits.map((digit, idx) => (
           <motion.span
@@ -26,7 +26,7 @@ export function SlidingNumber({ value }: SlidingNumberProps) {
             {digit}
           </motion.span>
         ))}
-      </AnimatePresence>
-    </div>
+        /</AnimatePresence>
+    </div >
   );
 }

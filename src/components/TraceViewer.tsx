@@ -24,7 +24,11 @@ interface Span {
   error?: string;
 }
 
-export function TraceViewer() {
+interface TraceViewerProps {
+  reloadTrigger: number;
+}
+
+export function TraceViewer({ reloadTrigger }: TraceViewerProps) {
   const [traces, setTraces] = useState<Trace[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [traceDetail, setTraceDetail] = useState<{ trace: Trace; spans: Span[] } | null>(null);
@@ -32,7 +36,7 @@ export function TraceViewer() {
 
   useEffect(() => {
     loadTraces();
-  }, []);
+  }, [reloadTrigger]);
 
   const loadTraces = () => {
     fetch("/api/dashboard/traces")
@@ -54,7 +58,6 @@ export function TraceViewer() {
       });
   };
 
-  // Hàm phụ trợ dựng cây đệ quy Span Tree
   const renderSpanNode = (span: Span, depth = 0) => {
     const isSelected = selectedSpan?.id === span.id;
     const typeIcon = span.type === "agent" ? "🤖" : span.type === "llm" ? "🧠" : span.type === "tool" ? "⚙️" : "📦";
@@ -63,14 +66,13 @@ export function TraceViewer() {
       <div key={span.id} className="space-y-1">
         <div
           onClick={() => setSelectedSpan(span)}
-          className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
-            isSelected ? "bg-blue-600/10 border-l-4 border-blue-500 pl-1" : "hover:bg-zinc-800/40"
-          }`}
+          className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? "bg-blue-50 border-l-4 border-blue-600 pl-1 text-blue-700" : "hover:bg-zinc-100"
+            }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
           <span className="mr-2 text-sm">{typeIcon}</span>
-          <span className="text-xs text-zinc-200 font-mono truncate flex-1">{span.name}</span>
-          <span className="text-[10px] text-zinc-500 font-mono ml-2">
+          <span className="text-xs text-zinc-700 font-mono truncate flex-1">{span.name}</span>
+          <span className="text-[10px] text-zinc-400 font-mono ml-2">
             {span.duration_ms ? `${span.duration_ms}ms` : "..."}
           </span>
         </div>
@@ -82,36 +84,34 @@ export function TraceViewer() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] border border-zinc-800 rounded-2xl h-[720px] max-h-[80vh] overflow-hidden bg-zinc-900/50">
-      {/* CỘT TRÁI: DANH SÁCH TRACES */}
-      <div className="border-r border-zinc-800 overflow-y-auto flex flex-col bg-zinc-950/20">
-        <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
-          <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">All Traces</span>
-          <button
-            onClick={loadTraces}
-            className="text-xs text-blue-400 hover:underline"
-          >
+    <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] border border-zinc-200 rounded-2xl h-[720px] max-h-[80vh] overflow-hidden bg-white select-text text-zinc-800">
+      <div className="border-r border-zinc-200 overflow-y-auto flex flex-col bg-zinc-50/50">
+        <div className="p-4 border-b border-zinc-200 flex justify-between items-center">
+          <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">All Traces</span>
+          <button onClick={loadTraces} className="text-xs text-blue-600 hover:underline cursor-pointer">
             Làm mới
           </button>
         </div>
-        <div className="divide-y divide-zinc-800/50">
+        <div className="divide-y divide-zinc-100">
           {traces.map((t) => (
             <div
               key={t.id}
               onClick={() => handleTraceClick(t.id)}
-              className={`p-3 cursor-pointer transition-colors text-left ${
-                selectedTraceId === t.id ? "bg-zinc-800/50" : "hover:bg-zinc-800/20"
-              }`}
+              className={`p-3 cursor-pointer transition-colors text-left ${selectedTraceId === t.id ? "bg-zinc-100" : "hover:bg-zinc-50"
+                }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span
-                  className={`w-2 h-2 rounded-full ${
-                    t.status === "completed" ? "bg-emerald-500" : t.status === "failed" ? "bg-red-500" : "bg-blue-500 animate-pulse"
-                  }`}
+                  className={`w-2 h-2 rounded-full ${t.status === "completed"
+                    ? "bg-emerald-500 glow-emerald"
+                    : t.status === "failed"
+                      ? "bg-red-500"
+                      : "bg-blue-500 animate-pulse"
+                    }`}
                 />
-                <span className="text-xs font-bold text-zinc-200 truncate flex-1">{t.name}</span>
+                <span className="text-xs font-bold text-zinc-800 truncate flex-1">{t.name}</span>
               </div>
-              <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+              <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
                 <span>{t.span_count} spans</span>
                 <span>{t.total_duration_ms ? `${(t.total_duration_ms / 1000).toFixed(1)}s` : "running..."}</span>
               </div>
@@ -120,50 +120,55 @@ export function TraceViewer() {
         </div>
       </div>
 
-      {/* CỘT PHẢI: CHI TIẾT TRACE & SPAN TREE */}
       <div className="grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         {traceDetail ? (
           <>
-            {/* CÂY PHÂN CẤP SPANS */}
-            <div className="border-r border-zinc-800/60 overflow-y-auto p-4 space-y-2 text-left bg-zinc-950/10">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Span Hierarchy</h3>
+            <div className="border-r border-zinc-200 overflow-y-auto p-4 space-y-2 text-left bg-zinc-50/30">
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Span Hierarchy</h3>
               {traceDetail.spans
                 .filter((s) => !s.parent_span_id)
                 .map((rootSpan) => renderSpanNode(rootSpan))}
             </div>
 
-            {/* CHI TIẾT CỦA SPAN ĐANG CHỌN */}
-            <div className="overflow-y-auto p-5 space-y-4 text-left bg-zinc-900">
+            <div className="overflow-y-auto p-5 space-y-4 text-left bg-white">
               {selectedSpan ? (
                 <>
                   <div>
-                    <h4 className="text-sm font-bold text-zinc-100 mb-1">{selectedSpan.name}</h4>
+                    <h4 className="text-sm font-bold text-zinc-900 mb-1">{selectedSpan.name}</h4>
                     <div className="flex gap-2">
-                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 border border-zinc-200">
                         {selectedSpan.type}
                       </span>
                       <span
-                        className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded ${
-                          selectedSpan.status === "completed"
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : "bg-red-500/10 text-red-400"
-                        }`}
+                        className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded ${selectedSpan.status === "completed"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-red-55 text-red-700 border border-red-200"
+                          }`}
                       >
                         {selectedSpan.status}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-xs space-y-1 text-zinc-400 border-t border-zinc-800/50 pt-3">
-                    <div className="flex"><span className="w-24">ID:</span><span className="font-mono text-zinc-300">{selectedSpan.id}</span></div>
-                    <div className="flex"><span className="w-24">Bắt đầu:</span><span>{new Date(selectedSpan.started_at).toLocaleTimeString()}</span></div>
-                    <div className="flex"><span className="w-24">Thời gian:</span><span>{selectedSpan.duration_ms}ms</span></div>
+                  <div className="text-xs space-y-1 text-zinc-500 border-t border-zinc-100 pt-3">
+                    <div className="flex">
+                      <span className="w-24">ID:</span>
+                      <span className="font-mono text-zinc-800">{selectedSpan.id}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-24">Bắt đầu:</span>
+                      <span>{new Date(selectedSpan.started_at).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-24">Thời gian:</span>
+                      <span>{selectedSpan.duration_ms}ms</span>
+                    </div>
                   </div>
 
                   {selectedSpan.input && (
                     <div className="space-y-1">
-                      <div className="text-xs font-bold text-zinc-400">Input Data:</div>
-                      <pre className="p-3 bg-zinc-950 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto max-h-48 whitespace-pre-wrap">
+                      <div className="text-xs font-bold text-zinc-500">Input Data:</div>
+                      <pre className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-mono text-blue-700 overflow-x-auto max-h-48 whitespace-pre-wrap select-text">
                         {selectedSpan.input}
                       </pre>
                     </div>
@@ -171,8 +176,8 @@ export function TraceViewer() {
 
                   {selectedSpan.output && (
                     <div className="space-y-1">
-                      <div className="text-xs font-bold text-zinc-400">Output Data:</div>
-                      <pre className="p-3 bg-zinc-950 rounded-lg text-xs font-mono text-emerald-300 overflow-x-auto max-h-60 whitespace-pre-wrap">
+                      <div className="text-xs font-bold text-zinc-500">Output Data:</div>
+                      <pre className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-mono text-emerald-850 overflow-x-auto max-h-60 whitespace-pre-wrap select-text">
                         {selectedSpan.output}
                       </pre>
                     </div>
@@ -180,20 +185,20 @@ export function TraceViewer() {
 
                   {selectedSpan.error && (
                     <div className="space-y-1">
-                      <div className="text-xs font-bold text-red-400">Error Stack:</div>
-                      <pre className="p-3 bg-red-950/20 border border-red-900/40 rounded-lg text-xs font-mono text-red-300 overflow-x-auto whitespace-pre-wrap">
+                      <div className="text-xs font-bold text-red-600">Error Stack:</div>
+                      <pre className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-mono text-red-700 overflow-x-auto whitespace-pre-wrap select-text">
                         {selectedSpan.error}
                       </pre>
                     </div>
                   )}
                 </>
               ) : (
-                <div className="text-zinc-500 text-sm text-center py-20">Chọn một span để xem chi tiết</div>
+                <div className="text-zinc-400 text-sm text-center py-20">Chọn một span để xem chi tiết</div>
               )}
             </div>
           </>
         ) : (
-          <div className="col-span-2 flex items-center justify-center text-zinc-500 text-sm py-40">
+          <div className="col-span-2 flex items-center justify-center text-zinc-400 text-sm py-40 bg-zinc-50/10">
             Chọn một trace ở cột trái để duyệt sơ đồ spans
           </div>
         )}
