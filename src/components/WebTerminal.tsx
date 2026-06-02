@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+// filepath: ridge_client/src/components/WebTerminal.tsx
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useSSE, ChatMessage, ExecutionStep } from '@/hooks/useSSE';
 import { Button } from './animate-ui/button';
 import { motion, AnimatePresence } from 'motion/react';
@@ -11,23 +12,35 @@ interface SwitchProps {
   onChange: (checked: boolean) => void;
 }
 
-function Switch({ checked, onChange }: SwitchProps) {
+interface CommandInfo {
+  cmd: string;
+  alias: string | null;
+  desc: string;
+  category: string;
+}
+
+interface ProviderInfo {
+  key: string;
+  name: string;
+}
+
+// TỐI ƯU: Chuyển Switch thành component thuần CSS mượt mà và bọc trong React.memo để loại bỏ hoàn toàn Framer Motion layout overhead khi gõ chữ
+const Switch = React.memo(function Switch({ checked, onChange }: SwitchProps) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${checked ? "bg-blue-600" : "bg-zinc-200"
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${checked ? "bg-blue-600" : "bg-zinc-200"
         }`}
     >
-      <motion.span
-        layout
-        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 ${checked ? "translate-x-4.5" : "translate-x-0.5"
+      <span
+        className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${checked ? "translate-x-4.5" : "translate-x-0.5"
           }`}
       />
     </button>
   );
-}
+});
+Switch.displayName = "Switch";
 
 function parseContentAndMermaid(content: string) {
   const regex = /```mermaid\n([\s\S]*?)```/g;
@@ -52,7 +65,7 @@ function parseContentAndMermaid(content: string) {
   return parts;
 }
 
-function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
+const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
 
@@ -123,7 +136,6 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                       step.type === 'terminal' && (() => {
                         let outputText = step.output || '';
                         try {
-                          // Tự động phân tích chuỗi JSON trả về từ Server để lấy kết quả thô
                           const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
                           if (parsed && typeof parsed === 'object') {
                             if (parsed.status === 'success' && parsed.data) {
@@ -139,7 +151,7 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                             }
                           }
                         } catch (e) {
-                          // Giữ nguyên dạng text nếu không phải là chuỗi JSON
+                          // Giữ nguyên dạng text
                         }
 
                         return (
@@ -149,7 +161,6 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                               style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
                               className="p-4 border rounded-xl text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap shadow-xs"
                             >
-                              {/* Input Command Line - Nền trắng, dấu nhắc lệnh xanh lục, nội dung lệnh màu xanh lam */}
                               <div className="flex items-start gap-2 mb-2.5 pb-2 border-b border-zinc-100">
                                 <span className="text-emerald-600 font-bold select-none shrink-0" style={{ color: '#059669' }}>$</span>
                                 <span className="font-semibold break-all" style={{ color: '#2563eb' }}>
@@ -157,7 +168,6 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                                 </span>
                               </div>
 
-                              {/* Output Area - Nền trắng, văn bản màu xám đen rõ ràng */}
                               {outputText ? (
                                 <div className="text-zinc-800 max-h-72 overflow-y-auto whitespace-pre-wrap leading-normal" style={{ color: '#27272a' }}>
                                   {outputText}
@@ -182,7 +192,6 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                       try {
                         const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
                         if (parsed && typeof parsed === 'object') {
-                          // Tự động giải bọc gói dữ liệu trả về từ server
                           const targetData = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
                           if (targetData && typeof targetData === 'object' && Array.isArray(targetData.files)) {
                             isDir = true;
@@ -193,7 +202,7 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                           }
                         }
                       } catch (e) {
-                        // Không phải JSON, giữ nguyên là văn bản thô
+                        // Không phải JSON
                       }
 
                       return (
@@ -241,7 +250,7 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                       <div className="space-y-3.5">
                         <div className="space-y-1.5">
                           <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Search Input</div>
-                          <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-600 whitespace-pre-wrap">
+                          <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-650 whitespace-pre-wrap">
                             {step.input}
                           </pre>
                         </div>
@@ -285,7 +294,293 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
       )}
     </div>
   );
+});
+
+const ChatMessageItem = React.memo(({ msg }: { msg: ChatMessage }) => {
+  const cleanContent = useMemo(() => {
+    return msg.content
+      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+      .trim();
+  }, [msg.content]);
+
+  const parts = useMemo(() => {
+    return parseContentAndMermaid(cleanContent);
+  }, [cleanContent]);
+
+  return (
+    <div className="space-y-4">
+      {parts.map((part, partIdx) => {
+        if (part.type === 'mermaid') {
+          return (
+            <div key={partIdx} className="my-2">
+              <MermaidRenderer code={part.content} />
+            </div>
+          );
+        }
+        const htmlContent = marked.parse(part.content) as string;
+        return (
+          <div
+            key={partIdx}
+            className="markdown-body-light text-left leading-relaxed text-sm select-text"
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          />
+        );
+      })}
+    </div>
+  );
+});
+ChatMessageItem.displayName = "ChatMessageItem";
+
+interface ChatInputFormProps {
+  activeAgent: "MaxHermes" | "MaxClaw";
+  currentActiveModelName: string;
+  realProviders: ProviderInfo[];
+  handleSwitchProvider: (providerKey: string, providerName: string) => void;
+  isGenerating: boolean;
+  stopGeneration: () => void;
+  availableCommands: CommandInfo[];
+  onSendMessage: (
+    prompt: string,
+    useReformulate: boolean,
+    useHeadless: boolean,
+    pastedImage: string | null
+  ) => void;
 }
+
+// TỐI ƯU: Memoize toàn bộ ChatInputForm nhằm chặn đứng re-render thừa kế từ WebTerminal hoặc App (trong lúc polling)
+const ChatInputForm = React.memo(function ChatInputForm({
+  activeAgent,
+  currentActiveModelName,
+  realProviders,
+  handleSwitchProvider,
+  isGenerating,
+  stopGeneration,
+  availableCommands,
+  onSendMessage
+}: ChatInputFormProps) {
+  const [input, setInput] = useState('');
+  const [useReformulate, setUseReformulate] = useState(false);
+  const [useHeadless, setUseHeadless] = useState(true);
+  const [pastedImage, setPastedImage] = useState<string | null>(null);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showCommandSuggest, setShowCommandSuggest] = useState(false);
+  const [filteredSuggests, setFilteredSuggests] = useState<CommandInfo[]>([]);
+
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    if (val.startsWith('/')) {
+      const query = val.toLowerCase();
+      const filtered = availableCommands.filter(c =>
+        c.cmd.startsWith(query) || (c.alias && c.alias.startsWith(query))
+      );
+      setFilteredSuggests(filtered);
+      setShowCommandSuggest(filtered.length > 0);
+    } else {
+      setShowCommandSuggest(false);
+    }
+  };
+
+  const handleCommandSelect = (cmd: string) => {
+    setInput(cmd + " ");
+    setShowCommandSuggest(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
+    e.preventDefault();
+    if ((!input.trim() && !pastedImage) || isGenerating) return;
+
+    onSendMessage(input, useReformulate, useHeadless, pastedImage);
+    setInput('');
+    setPastedImage(null);
+    setShowCommandSuggest(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.result) {
+              setPastedImage(event.target.result as string);
+            }
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="p-4 border-t border-zinc-200 bg-zinc-50/50 select-none relative"
+      // TỐI ƯU: Thêm transform translateZ(0) và will-change transform để ép trình duyệt đưa Form lên luồng GPU riêng biệt.
+      // Thay thế contain: 'layout style' thành 'content' (kết hợp cả layout, paint, style containment) để cô lập 100% paint flashing của con trỏ và text
+      style={{
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        contain: 'content',
+      }}
+    >
+      <AnimatePresence>
+        {showCommandSuggest && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-zinc-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-50 p-1.5"
+          >
+            <div className="px-2.5 py-1 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Hệ thống Slash Commands</div>
+            {filteredSuggests.map((c) => (
+              <button
+                key={c.cmd}
+                type="button"
+                onClick={() => handleCommandSelect(c.cmd)}
+                className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-50 rounded-lg flex items-center justify-between text-xs cursor-pointer font-semibold transition-colors text-zinc-700"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-600 font-mono font-bold">{c.cmd}</span>
+                  {c.alias && <span className="text-[10px] text-zinc-400 font-mono">(alias: {c.alias})</span>}
+                </div>
+                <span className="text-[10px] text-zinc-500">{c.desc}</span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex items-center gap-6 mb-3 select-none">
+        <div className="flex items-center gap-3">
+          <Switch checked={useReformulate} onChange={setUseReformulate} />
+          <span className="text-xs font-semibold text-zinc-500">
+            Tối ưu câu hỏi (Reformulate)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Switch checked={useHeadless} onChange={setUseHeadless} />
+          <span className="text-xs font-semibold text-zinc-500">
+            Chế độ chạy ngầm (Headless)
+          </span>
+        </div>
+      </div>
+
+      {pastedImage && (
+        <div className="relative inline-block mb-3 group animate-fade-in">
+          <img
+            src={pastedImage}
+            alt="Pasted Thumbnail"
+            className="max-h-24 max-w-[200px] rounded-lg border border-zinc-200 shadow-md object-contain bg-zinc-50 p-1"
+          />
+          <button
+            type="button"
+            onClick={() => setPastedImage(null)}
+            className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md transition-all cursor-pointer"
+            title="Xóa hình ảnh"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* TỐI ƯU: Sửa transition-all thành transition-[border-color,box-shadow] cụ thể để loại bỏ gánh nặng Reflow không cần thiết.
+          Đồng thời thay đổi containment từ 'layout style' sang 'content' để bao gói chặt khu vực textarea */}
+      <div
+        className="bg-zinc-50 border border-zinc-200 rounded-2xl p-2.5 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-[border-color,box-shadow] duration-200 shadow-md relative"
+        style={{ contain: 'content' }}
+      >
+        <textarea
+          value={input}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          placeholder="Nhập tin nhắn... (dùng / để hiển thị danh sách các lệnh nhanh)"
+          rows={2}
+          className="w-full bg-transparent border-none outline-none resize-none text-xs text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-1"
+        />
+
+        <div className="flex justify-between items-center border-t border-zinc-200/60 pt-2.5 mt-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="w-7 h-7 rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:text-zinc-800 flex items-center justify-center font-semibold text-xs cursor-pointer transition-colors shadow-sm"
+              title="Thêm tệp đính kèm"
+            >
+              +
+            </button>
+
+            <div className="relative inline-block text-left">
+              <button
+                type="button"
+                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                className="flex items-center gap-1.5 bg-white border border-zinc-200 hover:border-zinc-300 rounded-lg px-2.5 py-1 shadow-sm transition-[border-color,background-color] duration-200 cursor-pointer select-none"
+              >
+                <span className="text-xs">
+                  {activeAgent === "MaxHermes" ? "🤖" : "👾"}
+                </span>
+                <span className="text-[10px] font-bold text-zinc-700 font-mono">
+                  {activeAgent}
+                </span>
+                <span className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1 py-0.2">
+                  {currentActiveModelName}
+                </span>
+                <span className="text-[8px] text-zinc-400">▼</span>
+              </button>
+
+              {showModelDropdown && (
+                <div className="absolute bottom-full left-0 mb-1.5 w-52 bg-white border border-zinc-200 rounded-xl shadow-xl py-1 z-50 text-xs font-semibold text-zinc-700">
+                  <div className="px-3 py-1 text-[8px] uppercase tracking-wider text-zinc-400">Chọn Nhà cung cấp thực tế</div>
+                  {realProviders.map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => {
+                        handleSwitchProvider(p.key, p.name);
+                        setShowModelDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 hover:bg-zinc-50 flex items-center justify-between cursor-pointer ${currentActiveModelName === p.name ? "text-blue-600 bg-blue-50 font-bold" : "text-zinc-650"
+                        }`}
+                    >
+                      <span>{p.name}</span>
+                      {currentActiveModelName === p.name && <span className="text-[9px]">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* TỐI ƯU: Đưa nút submit về thẻ <button> HTML tiêu chuẩn được kích hoạt phần cứng CSS transition active:scale thay thế cho motion.button nhằm tăng tốc độ phản hồi phím gõ */}
+          <button
+            type="submit"
+            onClick={isGenerating ? stopGeneration : undefined}
+            className={`h-7 w-7 rounded-full flex items-center justify-center text-white font-bold p-0 cursor-pointer shadow-md transition-transform duration-200 active:scale-95 hover:scale-105 ${isGenerating ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
+              }`}
+            title={isGenerating ? "Dừng phản hồi" : "Gửi tin nhắn"}
+          >
+            {isGenerating ? '■' : '↑'}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+});
+ChatInputForm.displayName = "ChatInputForm";
 
 interface WebTerminalProps {
   activeAgent: "MaxHermes" | "MaxClaw";
@@ -295,58 +590,33 @@ interface WebTerminalProps {
   workspaceData: WorkspaceData | null;
 }
 
-interface CommandInfo {
-  cmd: string;
-  alias: string | null;
-  desc: string;
-  category: string;
-}
-
-interface ProviderInfo {
-  key: string;
-  name: string;
-}
-
 export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData }: WebTerminalProps) {
-  const [input, setInput] = useState('');
-  const [useReformulate, setUseReformulate] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef<boolean>(true);
-  const [useHeadless, setUseHeadless] = useState(true); // THÊM DÒNG NÀY: State quản lý Headless mode
-  const [pastedImage, setPastedImage] = useState<string | null>(null);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
 
-  // Thêm quản lý danh sách AI thực tế nạp từ Server
   const [realProviders, setRealProviders] = useState<ProviderInfo[]>([]);
-
-  // Command auto-complete states
   const [availableCommands, setAvailableCommands] = useState<CommandInfo[]>([]);
-  const [showCommandSuggest, setShowCommandSuggest] = useState(false);
-  const [filteredSuggests, setFilteredSuggests] = useState<CommandInfo[]>([]);
 
   const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setLogs } = sse;
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const lastValidatedMessageRef = useRef<string | null>(null);
   const fixAttemptsRef = useRef<number>(0);
+
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // Tính toán khoảng cách từ thanh cuộn hiện tại đến đáy của div container
-    const threshold = 50; // Ngưỡng dung sai pixel (50px) để nhận diện ở đáy
+    const threshold = 50;
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
-
-    // Cập nhật trạng thái tự động cuộn dựa trên vị trí cuộn thực tế của người dùng
     shouldAutoScrollRef.current = isAtBottom;
   };
-  // 1. Quét danh sách các Nhà cung cấp AI (Providers) thực tế từ Server
+
   useEffect(() => {
     fetch('/api/provider/config')
       .then((res) => res.json())
       .then((data) => {
         if (data && data.providers) {
-          // Lọc các nhà cung cấp đang ở trạng thái kích hoạt (enabled: true)
           const enabledList = Object.entries(data.providers)
             .filter(([_, p]: any) => p.enabled)
             .map(([key, p]: any) => ({
@@ -368,8 +638,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
       .catch((err) => console.error("Could not load commands database:", err));
   }, []);
 
-  // 2. Hàm kích hoạt chuyển đổi nóng (Hot-swapping Switch) AI Provider trên Server
-  const handleSwitchProvider = (providerKey: string, providerName: string) => {
+  const handleSwitchProvider = useCallback((providerKey: string, providerName: string) => {
     fetch('/api/provider/switch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -378,9 +647,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          // Cập nhật nhãn hiển thị tại nút bấm đại diện
           setActiveModel(providerName);
-          setShowModelDropdown(false);
           setLogs((prev) => [...prev, {
             timestamp: new Date().toLocaleTimeString(),
             text: `🔄 Đã chuyển đổi nóng nhà cung cấp AI thành công sang: ${providerName}`,
@@ -389,7 +656,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
         }
       })
       .catch((err) => console.error("Gặp sự cố khi chuyển nhà cung cấp:", err));
-  };
+  }, [setActiveModel, setLogs]);
 
   useEffect(() => {
     if (!isGenerating && messages.length > 0) {
@@ -434,8 +701,7 @@ ${block}
 \`\`\``;
 
                   setTimeout(() => {
-                    // SỬA: Bổ sung tham số useHeadless vào cuối để đồng bộ trạng thái chạy ngầm khi AI tự sửa code
-                    sendPrompt(systemFeedback, false, null, activeAgent, activeModel, useHeadless);
+                    sendPrompt(systemFeedback, false, null, activeAgent, activeModel, true);
                   }, 1500);
                 }
                 break;
@@ -451,74 +717,24 @@ ${block}
   }, [isGenerating, messages, sendPrompt, setLogs, activeAgent, activeModel]);
 
   useEffect(() => {
-    // Chỉ tự động cuộn xuống dưới cùng nếu người dùng đang ở đáy
     if (shouldAutoScrollRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-  const handleInputChange = (val: string) => {
-    setInput(val);
-    if (val.startsWith('/')) {
-      const query = val.toLowerCase();
-      const filtered = availableCommands.filter(c =>
-        c.cmd.startsWith(query) || (c.alias && c.alias.startsWith(query))
-      );
-      setFilteredSuggests(filtered);
-      setShowCommandSuggest(filtered.length > 0);
-    } else {
-      setShowCommandSuggest(false);
-    }
-  };
 
-  const handleCommandSelect = (cmd: string) => {
-    setInput(cmd + " ");
-    setShowCommandSuggest(false);
-  };
-
-  const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
-    e.preventDefault();
-    if ((!input.trim() && !pastedImage) || isGenerating) return;
-
-    // ÉP BUỘC bật lại chế độ tự động cuộn khi người dùng chủ động gửi câu hỏi mới
+  const handleSendMessage = useCallback((
+    prompt: string,
+    useReformulate: boolean,
+    useHeadless: boolean,
+    pastedImage: string | null
+  ) => {
     shouldAutoScrollRef.current = true;
-
-    sendPrompt(input, useReformulate, pastedImage, activeAgent, activeModel, useHeadless);
-    setInput('');
-    setPastedImage(null);
-    setShowCommandSuggest(false);
-  };
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        const file = items[i].getAsFile();
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            if (event.target?.result) {
-              setPastedImage(event.target.result as string);
-            }
-          };
-          reader.readAsDataURL(file);
-          e.preventDefault();
-          break;
-        }
-      }
-    }
-  };
+    sendPrompt(prompt, useReformulate, pastedImage, activeAgent, activeModel, useHeadless);
+  }, [sendPrompt, activeAgent, activeModel]);
 
   const activePipeline = workspaceData?.pipeline;
   const runningStepKey = workspaceData?.activeTask?.step_key || '';
   const currentStepMap = workspaceData?.states || [];
-
-  // Đồng bộ nhãn hiển thị mô hình thực tế từ bối cảnh kết nối của server
   const currentActiveModelName = workspaceData?.provider?.name || activeModel;
 
   return (
@@ -536,9 +752,14 @@ ${block}
         </header>
 
         <div
-          ref={scrollContainerRef} // Gắn ref theo dõi DOM
-          onScroll={handleScroll}   // Lắng nghe sự kiện cuộn chuột
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
           className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin bg-white"
+          style={{
+            transform: 'translateZ(0)',
+            willChange: 'transform',
+            contain: 'content'
+          }}
         >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400 py-32 text-center select-none">
@@ -574,35 +795,7 @@ ${block}
                     : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm self-start rounded-tl-xs w-full'
                     }`}
                 >
-                  {(() => {
-                    const cleanContent = msg.content
-                      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
-                      .trim();
-
-                    const parts = parseContentAndMermaid(cleanContent);
-
-                    return (
-                      <div className="space-y-4">
-                        {parts.map((part, partIdx) => {
-                          if (part.type === 'mermaid') {
-                            return (
-                              <div key={partIdx} className="my-2">
-                                <MermaidRenderer code={part.content} />
-                              </div>
-                            );
-                          }
-                          const htmlContent = marked.parse(part.content) as string;
-                          return (
-                            <div
-                              key={partIdx}
-                              className="markdown-body-light text-left leading-relaxed text-sm select-text"
-                              dangerouslySetInnerHTML={{ __html: htmlContent }}
-                            />
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                  <ChatMessageItem msg={msg} />
                 </div>
               </div>
             ))
@@ -652,153 +845,21 @@ ${block}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-4 border-t border-zinc-200 bg-zinc-50/50 select-none relative">
-
-          {/* Autocomplete Suggestion Box */}
-          <AnimatePresence>
-            {showCommandSuggest && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-zinc-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-50 p-1.5"
-              >
-                <div className="px-2.5 py-1 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Hệ thống Slash Commands</div>
-                {filteredSuggests.map((c) => (
-                  <button
-                    key={c.cmd}
-                    type="button"
-                    onClick={() => handleCommandSelect(c.cmd)}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-50 rounded-lg flex items-center justify-between text-xs cursor-pointer font-semibold transition-colors text-zinc-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-blue-600 font-mono font-bold">{c.cmd}</span>
-                      {c.alias && <span className="text-[10px] text-zinc-400 font-mono">(alias: {c.alias})</span>}
-                    </div>
-                    <span className="text-[10px] text-zinc-500">{c.desc}</span>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex items-center gap-6 mb-3 select-none">
-            <div className="flex items-center gap-3">
-              <Switch checked={useReformulate} onChange={setUseReformulate} />
-              <span className="text-xs font-semibold text-zinc-500">
-                Tối ưu câu hỏi (Reformulate)
-              </span>
-            </div>
-
-            {/* THÊM KHỐI NÀY: Switch bật tắt chế độ chạy ngầm */}
-            <div className="flex items-center gap-3">
-              <Switch checked={useHeadless} onChange={setUseHeadless} />
-              <span className="text-xs font-semibold text-zinc-500">
-                Chế độ chạy ngầm (Headless)
-              </span>
-            </div>
-          </div>
-
-          {pastedImage && (
-            <div className="relative inline-block mb-3 group animate-fade-in">
-              <img
-                src={pastedImage}
-                alt="Pasted Thumbnail"
-                className="max-h-24 max-w-[200px] rounded-lg border border-zinc-200 shadow-md object-contain bg-zinc-50 p-1"
-              />
-              <button
-                type="button"
-                onClick={() => setPastedImage(null)}
-                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md transition-all cursor-pointer"
-                title="Xóa hình ảnh"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-2.5 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-all shadow-md relative">
-            <textarea
-              value={input}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              placeholder="Nhập tin nhắn... (dùng / để hiển thị danh sách các lệnh nhanh)"
-              rows={2}
-              className="w-full bg-transparent border-none outline-none resize-none text-xs text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-1"
-            />
-
-            <div className="flex justify-between items-center border-t border-zinc-200/60 pt-2.5 mt-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="w-7 h-7 rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:text-zinc-800 flex items-center justify-center font-semibold text-xs cursor-pointer transition-colors shadow-sm"
-                  title="Thêm tệp đính kèm"
-                >
-                  +
-                </button>
-
-                {/* Agent Team Trigger Component */}
-                <div className="relative inline-block text-left">
-                  <button
-                    type="button"
-                    onClick={() => setShowModelDropdown(!showModelDropdown)}
-                    className="flex items-center gap-1.5 bg-white border border-zinc-200 hover:border-zinc-300 rounded-lg px-2.5 py-1 shadow-sm transition-all cursor-pointer select-none"
-                  >
-                    <span className="text-xs">
-                      {activeAgent === "MaxHermes" ? "🤖" : "👾"}
-                    </span>
-                    <span className="text-[10px] font-bold text-zinc-700 font-mono">
-                      {activeAgent}
-                    </span>
-                    <span className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1 py-0.2">
-                      {currentActiveModelName}
-                    </span>
-                    <span className="text-[8px] text-zinc-400">▼</span>
-                  </button>
-
-                  {showModelDropdown && (
-                    <div className="absolute bottom-full left-0 mb-1.5 w-52 bg-white border border-zinc-200 rounded-xl shadow-xl py-1 z-50 text-xs font-semibold text-zinc-700">
-                      <div className="px-3 py-1 text-[8px] uppercase tracking-wider text-zinc-400">Chọn Nhà cung cấp thực tế</div>
-                      {realProviders.map((p) => (
-                        <button
-                          key={p.key}
-                          type="button"
-                          onClick={() => handleSwitchProvider(p.key, p.name)}
-                          className={`w-full text-left px-3 py-1.5 hover:bg-zinc-50 flex items-center justify-between cursor-pointer ${currentActiveModelName === p.name ? "text-blue-600 bg-blue-50 font-bold" : "text-zinc-650"
-                            }`}
-                        >
-                          <span>{p.name}</span>
-                          {currentActiveModelName === p.name && <span className="text-[9px]">✓</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                variant={isGenerating ? "destructive" : "default"}
-                onClick={isGenerating ? stopGeneration : undefined}
-                className="h-7 w-7 rounded-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold p-0 cursor-pointer shadow-md transition-transform hover:scale-105"
-                title={isGenerating ? "Dừng phản hồi" : "Gửi tin nhắn"}
-              >
-                {isGenerating ? '■' : '↑'}
-              </Button>
-            </div>
-          </div>
-        </form>
+        <ChatInputForm
+          activeAgent={activeAgent}
+          currentActiveModelName={currentActiveModelName}
+          realProviders={realProviders}
+          handleSwitchProvider={handleSwitchProvider}
+          isGenerating={isGenerating}
+          stopGeneration={stopGeneration}
+          availableCommands={availableCommands}
+          onSendMessage={handleSendMessage}
+        />
       </div>
 
-      {/* 🚀 REAL-TIME SYNCHRONIZED BACKEND MONITOR SIDEBAR */}
       <aside className="hidden xl:flex flex-col w-75 border-l border-zinc-200 bg-zinc-50/50 h-full p-5 overflow-y-auto select-none shrink-0">
         <div className="space-y-6 text-left">
           {activePipeline ? (
-            // LIVE PIPELINE PROGRESS TRACKER
             <div className="space-y-4">
               <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -866,7 +927,6 @@ ${block}
               </div>
             </div>
           ) : (
-            // DYNAMIC ACTIVE AGENTS TEAM HUB
             <div className="space-y-5 animate-fade-in">
               <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
