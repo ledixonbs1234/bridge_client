@@ -6,7 +6,12 @@
             "request": "launch",
             "name": "Debug Vite",
             "url": "http://localhost:5173",
-            "webRoot": "${workspaceFolder}/src"
+            "webRoot": "${workspaceFolder}", // 1. Sửa từ /src về thư mục gốc để ánh xạ đúng node_modules thực tế
+            "sourceMaps": true,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**" // 2. Chỉ định rõ ràng KHÔNG quét và cảnh báo thiếu sourcemap từ thư mục node_modules
+            ]
         }
     ]
 }
