@@ -119,33 +119,123 @@ function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
                       </div>
                     )}
 
-                    {step.type === 'terminal' && (
-                      <div className="space-y-3.5">
-                        <div className="space-y-1.5">
-                          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Terminal Input</div>
-                          <pre className="p-3 bg-zinc-950 text-emerald-400 border border-zinc-900 rounded-lg text-xs whitespace-pre-wrap">
-                            {step.input}
-                          </pre>
-                        </div>
-                        {step.output && (
-                          <div className="space-y-1.5">
-                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Terminal Output</div>
-                            <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-700 whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
-                              {step.output}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {
+                      step.type === 'terminal' && (() => {
+                        let outputText = step.output || '';
+                        try {
+                          // Tự động phân tích chuỗi JSON trả về từ Server để lấy kết quả thô
+                          const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
+                          if (parsed && typeof parsed === 'object') {
+                            if (parsed.status === 'success' && parsed.data) {
+                              if (parsed.data.stdout !== undefined || parsed.data.stderr !== undefined) {
+                                outputText = (parsed.data.stdout || '') + (parsed.data.stderr || '');
+                              } else if (typeof parsed.data === 'string') {
+                                outputText = parsed.data;
+                              } else {
+                                outputText = JSON.stringify(parsed.data, null, 2);
+                              }
+                            } else if (parsed.status === 'error') {
+                              outputText = parsed.error_message || parsed.rawText || JSON.stringify(parsed, null, 2);
+                            }
+                          }
+                        } catch (e) {
+                          // Giữ nguyên dạng text nếu không phải là chuỗi JSON
+                        }
 
-                    {step.type === 'read_file' && (
-                      <div className="space-y-1.5">
-                        <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">File Content</div>
-                        <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-700 whitespace-pre-wrap max-h-96 overflow-y-auto overflow-x-auto leading-relaxed">
-                          {step.output || 'Đang tải nội dung file...'}
-                        </pre>
-                      </div>
-                    )}
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Terminal Console</div>
+                            <div
+                              style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
+                              className="p-4 border rounded-xl text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap shadow-xs"
+                            >
+                              {/* Input Command Line - Nền trắng, dấu nhắc lệnh xanh lục, nội dung lệnh màu xanh lam */}
+                              <div className="flex items-start gap-2 mb-2.5 pb-2 border-b border-zinc-100">
+                                <span className="text-emerald-600 font-bold select-none shrink-0" style={{ color: '#059669' }}>$</span>
+                                <span className="font-semibold break-all" style={{ color: '#2563eb' }}>
+                                  {step.input}
+                                </span>
+                              </div>
+
+                              {/* Output Area - Nền trắng, văn bản màu xám đen rõ ràng */}
+                              {outputText ? (
+                                <div className="text-zinc-800 max-h-72 overflow-y-auto whitespace-pre-wrap leading-normal" style={{ color: '#27272a' }}>
+                                  {outputText}
+                                </div>
+                              ) : (
+                                <div className="text-zinc-400 italic select-none" style={{ color: '#a1a1aa' }}>
+                                  Command executed / awaiting response...
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    }
+
+                    {step.type === 'read_file' && (() => {
+                      let isDir = false;
+                      let dirPath = '';
+                      let filesList: Array<{ name: string, type: string, path: string }> = [];
+                      let rawText = step.output || '';
+
+                      try {
+                        const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
+                        if (parsed && typeof parsed === 'object') {
+                          // Tự động giải bọc gói dữ liệu trả về từ server
+                          const targetData = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
+                          if (targetData && typeof targetData === 'object' && Array.isArray(targetData.files)) {
+                            isDir = true;
+                            dirPath = targetData.path || '';
+                            filesList = targetData.files;
+                          } else {
+                            rawText = JSON.stringify(parsed, null, 2);
+                          }
+                        }
+                      } catch (e) {
+                        // Không phải JSON, giữ nguyên là văn bản thô
+                      }
+
+                      return (
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                            {isDir ? 'Directory Content' : 'File Content'}
+                          </div>
+
+                          {isDir ? (
+                            <div className="p-3.5 bg-white border border-zinc-205 rounded-xl max-h-96 overflow-y-auto space-y-2 shadow-xs text-left">
+                              {dirPath && (
+                                <div className="text-[11px] text-zinc-450 font-mono border-b border-zinc-100 pb-1.5 mb-2 truncate">
+                                  📂 {dirPath}
+                                </div>
+                              )}
+                              <div className="divide-y divide-zinc-100 text-xs font-mono">
+                                {filesList.map((file, fIdx) => (
+                                  <div key={fIdx} className="flex items-center gap-2 py-1.5 hover:bg-zinc-50/70 px-1 rounded-md transition-colors">
+                                    <span className="text-sm shrink-0 select-none">
+                                      {file.type === 'directory' ? '📁' : '📄'}
+                                    </span>
+                                    <span className={file.type === 'directory' ? 'text-blue-600 font-semibold' : 'text-zinc-700'}>
+                                      {file.name}
+                                    </span>
+                                    <span className="text-[9px] text-zinc-400 truncate ml-auto hidden md:inline">
+                                      {file.path}
+                                    </span>
+                                  </div>
+                                ))}
+                                {filesList.length === 0 && (
+                                  <div className="text-zinc-400 italic text-center py-4 select-none">Thư mục trống</div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <pre className="p-3 bg-white border border-zinc-200 rounded-xl text-xs text-zinc-700 whitespace-pre-wrap max-h-96 overflow-y-auto overflow-x-auto leading-relaxed font-mono shadow-xs text-left">
+                              {rawText || 'Đang tải nội dung file...'}
+                            </pre>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {step.type === 'search' && (
                       <div className="space-y-3.5">
@@ -219,10 +309,10 @@ interface ProviderInfo {
 
 export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData }: WebTerminalProps) {
   const [input, setInput] = useState('');
-  const [useReformulate, setUseReformulate] = useState(true);
+  const [useReformulate, setUseReformulate] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef<boolean>(true);
-  const [useHeadless, setUseHeadless] = useState(false); // THÊM DÒNG NÀY: State quản lý Headless mode
+  const [useHeadless, setUseHeadless] = useState(true); // THÊM DÒNG NÀY: State quản lý Headless mode
   const [pastedImage, setPastedImage] = useState<string | null>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
 
@@ -450,7 +540,7 @@ ${block}
           onScroll={handleScroll}   // Lắng nghe sự kiện cuộn chuột
           className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin bg-white"
         >
-          {messages.length === 0 ? (  
+          {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400 py-32 text-center select-none">
               <span className="text-4xl mb-3 animate-bounce">💬</span>
               <p className="text-sm font-semibold text-zinc-600">Chưa có hội thoại.</p>

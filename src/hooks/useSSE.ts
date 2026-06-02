@@ -73,7 +73,7 @@ export function useSSE(onGenerationComplete?: () => void) {
     image?: string | null,
     agent?: string,
     model?: string,
-    headless?: boolean // THÊM THAM SỐ NÀY
+    headless?: boolean
   ) => {
     setIsGenerating(true);
     setPendingPermission(null);
@@ -160,16 +160,16 @@ export function useSSE(onGenerationComplete?: () => void) {
               if (tool.includes('bash') || tool.includes('command') || tool.includes('run') || tool.includes('terminal')) {
                 stepType = 'terminal';
                 cleanTitle = `Terminal ${parsed.input || 'Command'}`;
-              } else if (tool.includes('read') || tool.includes('view') || tool.includes('file')) {
+              } else if (tool.includes('read') || tool.includes('view') || tool.includes('file') || tool.includes('list_directory') || tool.includes('dir')) {
                 stepType = 'read_file';
-                cleanTitle = `Read File ${parsed.input || parsed.path || 'file'}`;
+                cleanTitle = `List Directory ${parsed.input || parsed.path || 'folder'}`;
               } else if (tool.includes('search') || tool.includes('grep') || tool.includes('find')) {
                 stepType = 'search';
                 cleanTitle = `Search ${parsed.input || parsed.pattern || 'query'}`;
               }
 
               currentSteps.push({
-                id: Math.random().toString(36).substring(2, 9),
+                id: parsed.step_id || Math.random().toString(36).substring(2, 9), // Sử dụng ID từ Server
                 type: stepType,
                 title: cleanTitle,
                 input: parsed.input || parsed.details || ''
@@ -183,9 +183,16 @@ export function useSSE(onGenerationComplete?: () => void) {
                 }
               });
             } else if (parsed.type === 'tool_output') {
-              if (currentSteps.length > 0) {
-                const last = currentSteps[currentSteps.length - 1];
-                last.output = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+              // Tìm kiếm chính xác phần tử dựa trên ID thống nhất từ Server
+              const targetStep = currentSteps.find(s => s.id === parsed.step_id);
+              if (targetStep) {
+                targetStep.output = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+              } else {
+                // Phương án dự phòng (Fallback) tương thích ngược nếu thiếu ID
+                const lastNonThinking = [...currentSteps].reverse().find(s => s.type !== 'thinking');
+                if (lastNonThinking) {
+                  lastNonThinking.output = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+                }
               }
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
@@ -201,14 +208,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                 details: parsed.details
               });
             } else if (parsed.type === 'done') {
-              if (parsed.history) {
-                setMessages(parsed.history.map((m: any) => ({
-                  role: m.role,
-                  content: m.content,
-                  image: m.image || undefined,
-                  steps: m.steps || []
-                })));
-              }
+              // Đã loại bỏ logic ghi đè messages từ parsed.history ở đây
               if (onGenerationComplete) onGenerationComplete();
             }
           } catch (e) {
