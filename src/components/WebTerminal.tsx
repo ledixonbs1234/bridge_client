@@ -325,21 +325,25 @@ function parseContentAndMermaid(content: string) {
   return parts;
 }
 
-const getMessageTimeline = (msg: ChatMessage): TimelineItem[] => {
+// Thay đổi signature nhận thêm tham số msgIdx
+const getMessageTimeline = (msg: ChatMessage, msgIdx: number): TimelineItem[] => {
+  // Nếu tin nhắn có lưu timeline (sau khi đã áp dụng Bước 1), trả về luôn để giữ đúng thứ tự hiển thị
   if (msg.timeline && msg.timeline.length > 0) {
     return msg.timeline;
   }
+
+  // Phương án dự phòng (Fallback) nếu timeline trống
   const reconstructed: TimelineItem[] = [];
   if (msg.steps && msg.steps.length > 0) {
     reconstructed.push({
-      id: 'reconstructed-steps-' + Math.random().toString(36).substring(2, 9),
+      id: `reconstructed-steps-${msgIdx}-${msg.steps.length}`,
       type: 'steps',
       steps: msg.steps
     });
   }
   if (msg.content && msg.content.trim()) {
     reconstructed.push({
-      id: 'reconstructed-text-' + Math.random().toString(36).substring(2, 9),
+      id: `reconstructed-text-${msgIdx}`,
       type: 'text',
       content: msg.content
     });
@@ -1115,11 +1119,12 @@ ${block}
 
                     {msg.role === 'assistant' ? (
                       <div className="space-y-3 w-full flex flex-col items-start">
-                        {getMessageTimeline(msg).map((item) => {
+                        {/* SỬA: Truyền thêm chỉ số idx vào getMessageTimeline */}
+                        {getMessageTimeline(msg, idx).map((item) => {
                           if (item.type === 'steps' && item.steps && item.steps.length > 0) {
                             return (
                               <CollapsibleSteps
-                                key={item.id}
+                                key={item.id} // Lúc này key item.id đã hoàn toàn ổn định qua các lần re-render
                                 steps={item.steps}
                                 forceExpand={isCurrentlyGeneratingThis}
                               />

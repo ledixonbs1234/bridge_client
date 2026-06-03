@@ -52,7 +52,9 @@ export function useSSE(onGenerationComplete?: () => void) {
             role: m.role,
             content: m.content,
             image: m.image || undefined,
-            steps: m.steps || []
+            steps: m.steps || [],
+            // SỬA: Bảo toàn cấu trúc timeline nguyên bản đã được lưu ở backend
+            timeline: m.timeline || undefined
           }));
           setMessages(loadedMessages);
 
