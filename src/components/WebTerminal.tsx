@@ -1,6 +1,6 @@
 // filepath: ridge_client/src/components/WebTerminal.tsx
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useSSE, ChatMessage, ExecutionStep } from '@/hooks/useSSE';
+import { useSSE, ChatMessage, ExecutionStep, TimelineItem } from '@/hooks/useSSE';
 import { Button } from './animate-ui/button';
 import { motion, AnimatePresence } from 'motion/react';
 import { marked } from 'marked';
@@ -24,7 +24,6 @@ interface ProviderInfo {
   name: string;
 }
 
-// TỐI ƯU: Chuyển Switch thành component thuần CSS mượt mà và bọc trong React.memo để loại bỏ hoàn toàn Framer Motion layout overhead khi gõ chữ
 const Switch = React.memo(function Switch({ checked, onChange }: SwitchProps) {
   return (
     <button
@@ -65,9 +64,79 @@ function parseContentAndMermaid(content: string) {
   return parts;
 }
 
-const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps: ExecutionStep[] }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const getMessageTimeline = (msg: ChatMessage): TimelineItem[] => {
+  if (msg.timeline && msg.timeline.length > 0) {
+    return msg.timeline;
+  }
+  const reconstructed: TimelineItem[] = [];
+  if (msg.steps && msg.steps.length > 0) {
+    reconstructed.push({
+      id: 'reconstructed-steps-' + Math.random().toString(36).substring(2, 9),
+      type: 'steps',
+      steps: msg.steps
+    });
+  }
+  if (msg.content && msg.content.trim()) {
+    reconstructed.push({
+      id: 'reconstructed-text-' + Math.random().toString(36).substring(2, 9),
+      type: 'text',
+      content: msg.content
+    });
+  }
+  return reconstructed;
+};
+
+const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
+  const cleanContent = useMemo(() => {
+    return content
+      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+      .trim();
+  }, [content]);
+
+  const parts = useMemo(() => {
+    return parseContentAndMermaid(cleanContent);
+  }, [cleanContent]);
+
+  return (
+    <div className="space-y-4 text-left">
+      {parts.map((part, partIdx) => {
+        if (part.type === 'mermaid') {
+          return (
+            <div key={partIdx} className="my-2">
+              <MermaidRenderer code={part.content} />
+            </div>
+          );
+        }
+        const htmlContent = marked.parse(part.content) as string;
+        return (
+          <div
+            key={partIdx}
+            className="markdown-body-light text-left leading-relaxed text-sm select-text"
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          />
+        );
+      })}
+    </div>
+  );
+});
+TimelineTextBlock.displayName = "TimelineTextBlock";
+interface CollapsibleStepsProps {
+  steps: ExecutionStep[];
+  forceExpand?: boolean;
+}
+// Đã tối ưu hóa giao diện nút gộp (màu xanh nước biển có mũi tên trắng xoay góc) giống y hệt như hình ảnh yêu cầu
+const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpand = false }: CollapsibleStepsProps) {
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
+
+  // Tự động mở rộng khi AI đang xử lý và thu gọn lại khi xử lý xong
+  useEffect(() => {
+    if (forceExpand) {
+      setIsCollapsed(false);
+    } else {
+      setIsCollapsed(true);
+    }
+  }, [forceExpand]);
 
   if (!steps || steps.length === 0) return null;
 
@@ -84,15 +153,15 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps
       <button
         type="button"
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="flex items-center gap-2 text-xs font-semibold text-zinc-600 hover:text-zinc-900 transition-colors cursor-pointer py-2 px-3 bg-zinc-50 border border-zinc-200 rounded-xl shadow-xs"
+        className="flex items-center gap-2.5 text-xs font-semibold text-zinc-600 hover:text-zinc-900 transition-colors cursor-pointer py-2 px-3 bg-zinc-50 border border-zinc-200 rounded-xl shadow-xs"
       >
         <span
-          className="text-[10px] text-zinc-400 transition-transform duration-200"
-          style={{ transform: isCollapsed ? 'none' : 'rotate(90deg)' }}
+          className="w-4 h-4 rounded bg-blue-600 flex items-center justify-center text-[8px] text-white transition-transform duration-200 select-none shrink-0 font-bold"
+          style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}
         >
-          ▶
+          ▼
         </span>
-        <span>
+        <span className="text-zinc-700">
           Thought {thinkingCount} time(s), Viewed {fileCount} file(s), Ran {commandCount} command(s)
         </span>
       </button>
@@ -126,7 +195,7 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps
                     {step.type === 'thinking' && (
                       <div className="space-y-1.5">
                         <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Thinking process</div>
-                        <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-600 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed">
+                        <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-605 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed">
                           {step.input}
                         </pre>
                       </div>
@@ -151,7 +220,7 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps
                             }
                           }
                         } catch (e) {
-                          // Giữ nguyên dạng text
+                          // ignore
                         }
 
                         return (
@@ -202,7 +271,7 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps
                           }
                         }
                       } catch (e) {
-                        // Không phải JSON
+                        // ignore
                       }
 
                       return (
@@ -295,41 +364,7 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps }: { steps
     </div>
   );
 });
-
-const ChatMessageItem = React.memo(({ msg }: { msg: ChatMessage }) => {
-  const cleanContent = useMemo(() => {
-    return msg.content
-      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
-      .trim();
-  }, [msg.content]);
-
-  const parts = useMemo(() => {
-    return parseContentAndMermaid(cleanContent);
-  }, [cleanContent]);
-
-  return (
-    <div className="space-y-4">
-      {parts.map((part, partIdx) => {
-        if (part.type === 'mermaid') {
-          return (
-            <div key={partIdx} className="my-2">
-              <MermaidRenderer code={part.content} />
-            </div>
-          );
-        }
-        const htmlContent = marked.parse(part.content) as string;
-        return (
-          <div
-            key={partIdx}
-            className="markdown-body-light text-left leading-relaxed text-sm select-text"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
-          />
-        );
-      })}
-    </div>
-  );
-});
-ChatMessageItem.displayName = "ChatMessageItem";
+CollapsibleSteps.displayName = "CollapsibleSteps";
 
 interface ChatInputFormProps {
   activeAgent: "MaxHermes" | "MaxClaw";
@@ -347,7 +382,6 @@ interface ChatInputFormProps {
   ) => void;
 }
 
-// TỐI ƯU: Memoize toàn bộ ChatInputForm nhằm chặn đứng re-render thừa kế từ WebTerminal hoặc App (trong lúc polling)
 const ChatInputForm = React.memo(function ChatInputForm({
   activeAgent,
   currentActiveModelName,
@@ -426,8 +460,6 @@ const ChatInputForm = React.memo(function ChatInputForm({
     <form
       onSubmit={handleSubmit}
       className="p-4 border-t border-zinc-200 bg-zinc-50/50 select-none relative"
-      // TỐI ƯU: Thêm transform translateZ(0) và will-change transform để ép trình duyệt đưa Form lên luồng GPU riêng biệt.
-      // Thay thế contain: 'layout style' thành 'content' (kết hợp cả layout, paint, style containment) để cô lập 100% paint flashing của con trỏ và text
       style={{
         transform: 'translateZ(0)',
         willChange: 'transform',
@@ -495,8 +527,6 @@ const ChatInputForm = React.memo(function ChatInputForm({
         </div>
       )}
 
-      {/* TỐI ƯU: Sửa transition-all thành transition-[border-color,box-shadow] cụ thể để loại bỏ gánh nặng Reflow không cần thiết.
-          Đồng thời thay đổi containment từ 'layout style' sang 'content' để bao gói chặt khu vực textarea */}
       <div
         className="bg-zinc-50 border border-zinc-200 rounded-2xl p-2.5 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-[border-color,box-shadow] duration-200 shadow-md relative"
         style={{ contain: 'content' }}
@@ -565,7 +595,6 @@ const ChatInputForm = React.memo(function ChatInputForm({
             </div>
           </div>
 
-          {/* TỐI ƯU: Đưa nút submit về thẻ <button> HTML tiêu chuẩn được kích hoạt phần cứng CSS transition active:scale thay thế cho motion.button nhằm tăng tốc độ phản hồi phím gõ */}
           <button
             type="submit"
             onClick={isGenerating ? stopGeneration : undefined}
@@ -592,6 +621,8 @@ interface WebTerminalProps {
 
 export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData }: WebTerminalProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const innerContainerRef = useRef<HTMLDivElement>(null); // THÊM: Theo dõi chiều cao thực tế của nội dung
+  const lastScrollTopRef = useRef<number>(0); // THÊM: Theo dõi hướng cuộn của người dùng
   const shouldAutoScrollRef = useRef<boolean>(true);
 
   const [realProviders, setRealProviders] = useState<ProviderInfo[]>([]);
@@ -603,14 +634,45 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
   const lastValidatedMessageRef = useRef<string | null>(null);
   const fixAttemptsRef = useRef<number>(0);
 
+  // SỬA ĐỔI: Logic kiểm tra hướng cuộn thông minh để không tắt nhầm auto-scroll khi chiều cao thay đổi
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const threshold = 50;
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
-    shouldAutoScrollRef.current = isAtBottom;
+    const currentScrollTop = container.scrollTop;
+    const isScrollingUp = currentScrollTop < lastScrollTopRef.current;
+
+    // Lưu lại vị trí cuộn cuối cùng
+    lastScrollTopRef.current = currentScrollTop;
+
+    const threshold = 100;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+
+    if (isNearBottom) {
+      shouldAutoScrollRef.current = true;
+    } else if (isScrollingUp) {
+      // Chỉ tắt auto-scroll khi người dùng thực sự chủ động cuộn chuột ngược lên trên
+      shouldAutoScrollRef.current = false;
+    }
   };
+
+  // THÊM: Sử dụng ResizeObserver để tự động cuộn khi bất kỳ nội dung nào (text, steps, mermaid) thay đổi kích thước
+  useEffect(() => {
+    const innerContainer = innerContainerRef.current;
+    if (!innerContainer) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (shouldAutoScrollRef.current) {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+
+    resizeObserver.observe(innerContainer);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     fetch('/api/provider/config')
@@ -754,53 +816,82 @@ ${block}
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin bg-white"
+          className="flex-1 overflow-y-auto p-6 scrollbar-thin bg-white"
           style={{
             transform: 'translateZ(0)',
             willChange: 'transform',
             contain: 'content'
           }}
         >
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-zinc-400 py-32 text-center select-none">
-              <span className="text-4xl mb-3 animate-bounce">💬</span>
-              <p className="text-sm font-semibold text-zinc-600">Chưa có hội thoại.</p>
-              <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
-                Nhập tin nhắn đầu tiên bên dưới. Bạn có thể sử dụng dấu <code className="text-blue-600 bg-zinc-100 px-1 py-0.5 rounded">/</code> để gọi các lệnh hệ thống nhanh.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex flex-col space-y-2.5 max-w-[90%] text-sm ${msg.role === 'user' ? 'ml-auto' : 'mr-auto w-full'}`}
-              >
-                {msg.image && (
-                  <div className="mb-1 self-end">
-                    <img
-                      src={msg.image}
-                      alt="Uploaded visual data"
-                      className="max-h-56 rounded-xl border border-zinc-200 object-contain shadow-md bg-zinc-50 p-0.5"
-                    />
-                  </div>
-                )}
-
-                {msg.role === 'assistant' && msg.steps && msg.steps.length > 0 && (
-                  <CollapsibleSteps steps={msg.steps} />
-                )}
-
-                <div
-                  className={`p-4 rounded-2xl ${msg.role === 'user'
-                    ? 'bg-zinc-100 border border-zinc-200 text-zinc-900 shadow-xs self-end rounded-tr-xs'
-                    : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm self-start rounded-tl-xs w-full'
-                    }`}
-                >
-                  <ChatMessageItem msg={msg} />
-                </div>
+          <div ref={innerContainerRef} className="space-y-6">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-400 py-32 text-center select-none">
+                <span className="text-4xl mb-3 animate-bounce">💬</span>
+                <p className="text-sm font-semibold text-zinc-600">Chưa có hội thoại.</p>
+                <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                  Nhập tin nhắn đầu tiên bên dưới. Bạn có thể sử dụng dấu <code className="text-blue-600 bg-zinc-100 px-1 py-0.5 rounded">/</code> để gọi các lệnh hệ thống nhanh.
+                </p>
               </div>
-            ))
-          )}
-          <div ref={chatEndRef} />
+            ) : (
+              messages.map((msg, idx) => {
+                const isLastMessage = idx === messages.length - 1;
+                const isCurrentlyGeneratingThis = isLastMessage && isGenerating;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`flex flex-col space-y-2.5 max-w-[90%] text-sm ${msg.role === 'user' ? 'ml-auto' : 'mr-auto w-full'}`}
+                  >
+                    {msg.image && (
+                      <div className="mb-1 self-end">
+                        <img
+                          src={msg.image}
+                          alt="Uploaded visual data"
+                          className="max-h-56 rounded-xl border border-zinc-200 object-contain shadow-md bg-zinc-50 p-0.5"
+                        />
+                      </div>
+                    )}
+
+                    {msg.role === 'assistant' ? (
+                      <div className="space-y-3 w-full flex flex-col items-start">
+                        {getMessageTimeline(msg).map((item) => {
+                          if (item.type === 'steps' && item.steps && item.steps.length > 0) {
+                            return (
+                              <CollapsibleSteps
+                                key={item.id}
+                                steps={item.steps}
+                                forceExpand={isCurrentlyGeneratingThis}
+                              />
+                            );
+                          } else if (item.type === 'text' && item.content && item.content.trim()) {
+                            return (
+                              <div
+                                key={item.id}
+                                className="p-4 rounded-2xl bg-white border border-zinc-200 text-zinc-800 shadow-sm self-start rounded-tl-xs w-full text-left"
+                              >
+                                <TimelineTextBlock content={item.content} />
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        className={`p-4 rounded-2xl ${msg.role === 'user'
+                          ? 'bg-zinc-100 border border-zinc-200 text-zinc-900 shadow-xs self-end rounded-tr-xs'
+                          : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm self-start rounded-tl-xs w-full'
+                          }`}
+                      >
+                        <TimelineTextBlock content={msg.content} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            <div ref={chatEndRef} />
+          </div>
         </div>
 
         {pendingPermission && (

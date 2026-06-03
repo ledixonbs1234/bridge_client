@@ -8,11 +8,19 @@ export interface ExecutionStep {
   output?: string;
 }
 
+export interface TimelineItem {
+  id: string;
+  type: 'text' | 'steps';
+  content?: string;
+  steps?: ExecutionStep[];
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   image?: string;
   steps?: ExecutionStep[];
+  timeline?: TimelineItem[];
 }
 
 export interface LogEntry {
@@ -126,9 +134,45 @@ export function useSSE(onGenerationComplete?: () => void) {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last && last.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...last, content: last.content + parsed.content }];
+                  const updatedTimeline = last.timeline ? [...last.timeline] : [];
+                  const lastItem = updatedTimeline[updatedTimeline.length - 1];
+
+                  if (lastItem && lastItem.type === 'text') {
+                    updatedTimeline[updatedTimeline.length - 1] = {
+                      ...lastItem,
+                      content: (lastItem.content || '') + parsed.content
+                    };
+                  } else {
+                    updatedTimeline.push({
+                      id: 'text-' + Math.random().toString(36).substring(2, 9),
+                      type: 'text',
+                      content: parsed.content
+                    });
+                  }
+
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...last,
+                      content: last.content + parsed.content,
+                      timeline: updatedTimeline
+                    }
+                  ];
                 } else {
-                  return [...prev, { role: 'assistant', content: parsed.content, steps: [...currentSteps] }];
+                  const initialTimeline: TimelineItem[] = [{
+                    id: 'text-' + Math.random().toString(36).substring(2, 9),
+                    type: 'text',
+                    content: parsed.content
+                  }];
+                  return [
+                    ...prev,
+                    {
+                      role: 'assistant',
+                      content: parsed.content,
+                      steps: [],
+                      timeline: initialTimeline
+                    }
+                  ];
                 }
               });
             } else if (parsed.type === 'log') {
@@ -144,12 +188,74 @@ export function useSSE(onGenerationComplete?: () => void) {
                   input: content
                 });
               }
+
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...lastMsg, steps: [...currentSteps] }];
+                  const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
+                  const lastItem = updatedTimeline[updatedTimeline.length - 1];
+
+                  if (lastItem && lastItem.type === 'steps' && lastItem.steps) {
+                    const updatedSteps = [...lastItem.steps];
+                    const lastStep = updatedSteps[updatedSteps.length - 1];
+                    if (lastStep && lastStep.type === 'thinking') {
+                      updatedSteps[updatedSteps.length - 1] = {
+                        ...lastStep,
+                        input: (lastStep.input || '') + '\n' + content
+                      };
+                    } else {
+                      updatedSteps.push({
+                        id: Math.random().toString(36).substring(2, 9),
+                        type: 'thinking',
+                        title: 'Thinking process',
+                        input: content
+                      });
+                    }
+                    updatedTimeline[updatedTimeline.length - 1] = {
+                      ...lastItem,
+                      steps: updatedSteps
+                    };
+                  } else {
+                    updatedTimeline.push({
+                      id: 'steps-' + Math.random().toString(36).substring(2, 9),
+                      type: 'steps',
+                      steps: [{
+                        id: Math.random().toString(36).substring(2, 9),
+                        type: 'thinking',
+                        title: 'Thinking process',
+                        input: content
+                      }]
+                    });
+                  }
+
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...lastMsg,
+                      steps: [...currentSteps],
+                      timeline: updatedTimeline
+                    }
+                  ];
                 } else {
-                  return [...prev, { role: 'assistant', content: '', steps: [...currentSteps] }];
+                  const initialStep: ExecutionStep = {
+                    id: Math.random().toString(36).substring(2, 9),
+                    type: 'thinking',
+                    title: 'Thinking process',
+                    input: content
+                  };
+                  return [
+                    ...prev,
+                    {
+                      role: 'assistant',
+                      content: '',
+                      steps: [initialStep],
+                      timeline: [{
+                        id: 'steps-' + Math.random().toString(36).substring(2, 9),
+                        type: 'steps',
+                        steps: [initialStep]
+                      }]
+                    }
+                  ];
                 }
               });
             } else if (parsed.type === 'action') {
@@ -168,36 +274,126 @@ export function useSSE(onGenerationComplete?: () => void) {
                 cleanTitle = `Search ${parsed.input || parsed.pattern || 'query'}`;
               }
 
-              currentSteps.push({
-                id: parsed.step_id || Math.random().toString(36).substring(2, 9), // Sử dụng ID từ Server
+              const newStep: ExecutionStep = {
+                id: parsed.step_id || Math.random().toString(36).substring(2, 9),
                 type: stepType,
                 title: cleanTitle,
                 input: parsed.input || parsed.details || ''
-              });
+              };
+
+              currentSteps.push(newStep);
+
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...lastMsg, steps: [...currentSteps] }];
+                  const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
+                  const lastItem = updatedTimeline[updatedTimeline.length - 1];
+
+                  if (lastItem && lastItem.type === 'steps' && lastItem.steps) {
+                    updatedTimeline[updatedTimeline.length - 1] = {
+                      ...lastItem,
+                      steps: [...lastItem.steps, newStep]
+                    };
+                  } else {
+                    updatedTimeline.push({
+                      id: 'steps-' + Math.random().toString(36).substring(2, 9),
+                      type: 'steps',
+                      steps: [newStep]
+                    });
+                  }
+
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...lastMsg,
+                      steps: [...currentSteps],
+                      timeline: updatedTimeline
+                    }
+                  ];
                 } else {
-                  return [...prev, { role: 'assistant', content: '', steps: [...currentSteps] }];
+                  return [
+                    ...prev,
+                    {
+                      role: 'assistant',
+                      content: '',
+                      steps: [newStep],
+                      timeline: [{
+                        id: 'steps-' + Math.random().toString(36).substring(2, 9),
+                        type: 'steps',
+                        steps: [newStep]
+                      }]
+                    }
+                  ];
                 }
               });
             } else if (parsed.type === 'tool_output') {
-              // Tìm kiếm chính xác phần tử dựa trên ID thống nhất từ Server
+              const parsedOutput = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+
               const targetStep = currentSteps.find(s => s.id === parsed.step_id);
               if (targetStep) {
-                targetStep.output = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+                targetStep.output = parsedOutput;
               } else {
-                // Phương án dự phòng (Fallback) tương thích ngược nếu thiếu ID
                 const lastNonThinking = [...currentSteps].reverse().find(s => s.type !== 'thinking');
                 if (lastNonThinking) {
-                  lastNonThinking.output = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+                  lastNonThinking.output = parsedOutput;
                 }
               }
+
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...lastMsg, steps: [...currentSteps] }];
+                  const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
+                  let updated = false;
+
+                  for (let i = 0; i < updatedTimeline.length; i++) {
+                    const item = updatedTimeline[i];
+                    if (item.type === 'steps' && item.steps) {
+                      const stepIdx = item.steps.findIndex(s => s.id === parsed.step_id);
+                      if (stepIdx !== -1) {
+                        const newSteps = [...item.steps];
+                        newSteps[stepIdx] = {
+                          ...newSteps[stepIdx],
+                          output: parsedOutput
+                        };
+                        updatedTimeline[i] = {
+                          ...item,
+                          steps: newSteps
+                        };
+                        updated = true;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (!updated) {
+                    const lastTimelineStepsIdx = updatedTimeline.map(item => item.type === 'steps').lastIndexOf(true);
+                    if (lastTimelineStepsIdx !== -1) {
+                      const item = updatedTimeline[lastTimelineStepsIdx];
+                      if (item.steps && item.steps.length > 0) {
+                        const newSteps = [...item.steps];
+                        const lastNonThinkingIdx = newSteps.map(s => s.type !== 'thinking').lastIndexOf(true);
+                        if (lastNonThinkingIdx !== -1) {
+                          newSteps[lastNonThinkingIdx] = {
+                            ...newSteps[lastNonThinkingIdx],
+                            output: parsedOutput
+                          };
+                          updatedTimeline[lastTimelineStepsIdx] = {
+                            ...item,
+                            steps: newSteps
+                          };
+                        }
+                      }
+                    }
+                  }
+
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...lastMsg,
+                      steps: [...currentSteps],
+                      timeline: updatedTimeline
+                    }
+                  ];
                 }
                 return prev;
               });
@@ -208,11 +404,10 @@ export function useSSE(onGenerationComplete?: () => void) {
                 details: parsed.details
               });
             } else if (parsed.type === 'done') {
-              // Đã loại bỏ logic ghi đè messages từ parsed.history ở đây
               if (onGenerationComplete) onGenerationComplete();
             }
           } catch (e) {
-            // Bỏ qua lỗi dòng thô
+            // Bỏ qua lỗi
           }
         }
       }
