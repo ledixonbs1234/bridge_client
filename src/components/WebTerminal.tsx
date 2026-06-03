@@ -7,6 +7,267 @@ import { marked } from 'marked';
 import { MermaidRenderer } from './MermaidRenderer';
 import { WorkspaceData } from '../App';
 
+// =================================================================
+// 🎨 Component: Giao diện Wizard câu hỏi hiện đại của FluxMem
+// =================================================================
+interface QuestionOption {
+  label: string;
+  value: string;
+  is_default?: boolean;
+}
+
+// 2. Định nghĩa Interface cấu trúc cho từng câu hỏi
+interface QuestionItem {
+  id: string;
+  question: string;
+  type: "select" | "multi_select" | "text";
+  options?: QuestionOption[];
+  allow_custom?: boolean;
+}
+
+interface StructuredQuestionsFormProps {
+  data: {
+    explanation: string;
+    questions: any; // Chấp nhận string hoặc array ở mức runtime
+  };
+  onSubmit: (answers: Record<string, any>) => void;
+  onCancel: () => void;
+}
+
+const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ data, onSubmit, onCancel }: StructuredQuestionsFormProps) {
+  // Giải tuần tự hóa an toàn câu hỏi và chỉ định rõ kiểu dữ liệu trả về là mảng QuestionItem[]
+  const questionsArray = useMemo<QuestionItem[]>(() => {
+    let q = data.questions;
+    if (typeof q === 'string') {
+      try {
+        q = JSON.parse(q);
+      } catch (e) {
+        q = [];
+      }
+    }
+    return Array.isArray(q) ? (q as QuestionItem[]) : [];
+  }, [data.questions]);
+
+  // Khởi tạo các câu trả lời mặc định với kiểu dữ liệu tường minh trong callback
+  const [formState, setFormState] = useState<Record<string, any>>(() => {
+    const initial: Record<string, any> = {};
+    questionsArray.forEach((q: QuestionItem) => {
+      if (q.type === 'select') {
+        const defaultOpt = q.options?.find((o: QuestionOption) => o.is_default);
+        initial[q.id] = defaultOpt ? defaultOpt.value : (q.options?.[0]?.value || '');
+      } else if (q.type === 'multi_select') {
+        initial[q.id] = q.options?.filter((o: QuestionOption) => o.is_default).map((o: QuestionOption) => o.value) || [];
+      } else {
+        initial[q.id] = '';
+      }
+    });
+    return initial;
+  });
+
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [useCustom, setUseCustom] = useState<Record<string, boolean>>({});
+
+  const handleToggleMultiSelect = useCallback((qId: string, val: string) => {
+    setFormState(prev => {
+      const current = prev[qId] || [];
+      const next = current.includes(val)
+        ? current.filter((v: string) => v !== val)
+        : [...current, val];
+      return { ...prev, [qId]: next };
+    });
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalAnswers: Record<string, any> = {};
+    questionsArray.forEach((q: QuestionItem) => {
+      if (q.type === 'select') {
+        finalAnswers[q.id] = useCustom[q.id] ? (customValues[q.id] || '') : formState[q.id];
+      } else if (q.type === 'multi_select') {
+        const selected = [...(formState[q.id] || [])];
+        if (q.allow_custom && useCustom[q.id] && customValues[q.id]) {
+          selected.push(customValues[q.id]);
+        }
+        finalAnswers[q.id] = selected;
+      } else {
+        finalAnswers[q.id] = formState[q.id];
+      }
+    });
+    onSubmit(finalAnswers);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Khối giải thích bối cảnh kỹ thuật */}
+      <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 shadow-inner">
+        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1">💡 GIẢI THÍCH NGỮ CẢNH CỦA AGENT</span>
+        <p className="text-xs text-zinc-700 leading-relaxed font-semibold">{data.explanation}</p>
+      </div>
+
+      {/* Danh sách câu hỏi cuộn dọc */}
+      <div className="space-y-5 divide-y divide-zinc-100 max-h-[380px] overflow-y-auto pr-1">
+        {questionsArray.map((q: QuestionItem, idx: number) => (
+          <div key={q.id} className={`pt-4 ${idx === 0 ? 'pt-0 border-none' : ''}`}>
+            <label className="text-xs font-bold text-zinc-800 block mb-2.5">
+              <span className="text-blue-600 font-extrabold mr-2">{idx + 1}.</span>
+              {q.question}
+            </label>
+
+            {/* Kiểu câu hỏi: SELECT (Chọn 1) */}
+            {q.type === 'select' && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {q.options?.map((opt: QuestionOption) => {
+                    const isSelected = formState[q.id] === opt.value && !useCustom[q.id];
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setUseCustom(prev => ({ ...prev, [q.id]: false }));
+                          setFormState(prev => ({ ...prev, [q.id]: opt.value }));
+                        }}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-xs ${isSelected
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                          }`}
+                      >
+                        {opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}
+                      </button>
+                    );
+                  })}
+                  {q.allow_custom && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: true }))}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                        }`}
+                    >
+                      ✏️ Tự nhập phương án...
+                    </button>
+                  )}
+                </div>
+
+                <AnimatePresence>
+                  {useCustom[q.id] && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <input
+                        type="text"
+                        required
+                        value={customValues[q.id] || ''}
+                        onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Nhập phương án tự định nghĩa của bạn..."
+                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs"
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Kiểu câu hỏi: MULTI_SELECT (Chọn nhiều) */}
+            {q.type === 'multi_select' && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {q.options?.map((opt: QuestionOption) => {
+                    const isSelected = formState[q.id]?.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleToggleMultiSelect(q.id, opt.value)}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-xs ${isSelected
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                          }`}
+                      >
+                        {isSelected ? '✓ ' : ''}{opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}
+                      </button>
+                    );
+                  })}
+                  {q.allow_custom && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: !prev[q.id] }))}
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                        }`}
+                    >
+                      ✏️ Ý kiến bổ sung...
+                    </button>
+                  )}
+                </div>
+
+                <AnimatePresence>
+                  {useCustom[q.id] && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <input
+                        type="text"
+                        required
+                        value={customValues[q.id] || ''}
+                        onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Nhập phương án tự định nghĩa bổ sung..."
+                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs"
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Kiểu câu hỏi: TEXT (Văn bản tự do) */}
+            {q.type === 'text' && (
+              <textarea
+                required
+                value={formState[q.id] || ''}
+                onChange={(e) => setFormState(prev => ({ ...prev, [q.id]: e.target.value }))}
+                placeholder="Nhập câu trả lời chi tiết của bạn..."
+                rows={3}
+                className="w-full px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs resize-none"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Hành động gửi/hủy ở cuối form */}
+      <div className="flex gap-2 justify-end border-t border-zinc-150 pt-4 mt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          className="text-zinc-600 border-zinc-200 hover:bg-zinc-50 text-[10px] h-8 px-3 cursor-pointer"
+          onClick={onCancel}
+        >
+          Từ chối (Hủy bỏ)
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          type="submit"
+          className="text-[10px] h-8 px-4 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer border-none font-semibold"
+        >
+          ✓ Xác nhận hoàn tất
+        </Button>
+      </div>
+    </form>
+  );
+});
+StructuredQuestionsForm.displayName = "StructuredQuestionsForm";
+
 interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -895,44 +1156,82 @@ ${block}
         </div>
 
         {pendingPermission && (
-          <div className="mx-6 mb-4 p-4 bg-zinc-50 border border-amber-500/30 rounded-xl space-y-3 shadow-md text-left">
-            <div className="flex items-center gap-2 text-amber-600 font-bold text-xs">
-              <span className="animate-pulse">⚠️</span> YÊU CẦU PHÊ DUYỆT WORKFLOW
-            </div>
-            <p className="text-xs text-zinc-700 leading-relaxed font-semibold">
-              {pendingPermission.query}
-            </p>
-            {pendingPermission.details && (
-              <pre className="p-2.5 bg-white border border-zinc-200 text-[10px] text-zinc-500 font-mono rounded overflow-auto max-h-32 whitespace-pre-wrap">
-                {pendingPermission.details}
-              </pre>
-            )}
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-red-600 border-red-200 hover:bg-red-50 text-[10px] h-8 px-2.5 cursor-pointer"
-                onClick={() => respondToPermission(pendingPermission.id, 'n')}
-              >
-                Từ chối
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-blue-600 border-blue-200 hover:bg-blue-50 text-[10px] h-8 px-2.5 cursor-pointer"
-                onClick={() => respondToPermission(pendingPermission.id, 'y')}
-              >
-                Đồng ý (Yes)
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                className="text-[10px] h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer border-none"
-                onClick={() => respondToPermission(pendingPermission.id, 'a')}
-              >
-                Đồng ý tất cả
-              </Button>
-            </div>
+          <div className="mx-6 mb-4 p-5 bg-white border border-zinc-200 rounded-2xl space-y-4 shadow-lg text-left relative overflow-hidden">
+            {/* Thanh màu chỉ báo hành động khẩn cấp */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-amber-500" />
+
+            {(() => {
+              // Thử nghiệm parse dữ liệu bối cảnh xem có phải gói tin câu hỏi có cấu trúc không
+              let structuredQuestions = null;
+              if (pendingPermission.details && pendingPermission.details.trim().startsWith('{')) {
+                try {
+                  const parsed = JSON.parse(pendingPermission.details);
+                  if (parsed.type === 'structured_questions') {
+                    structuredQuestions = parsed;
+                  }
+                } catch (e) {
+                  // Fallback về cách hiển thị nhật ký logs thô ban đầu
+                }
+              }
+
+              if (structuredQuestions) {
+                return (
+                  <>
+                    <div className="flex items-center gap-2 text-blue-600 font-bold text-xs">
+                      <span className="animate-pulse">❓</span> YÊU CẦU LÀM RÕ THÔNG TIN (STRUCTURED WIZARD)
+                    </div>
+                    <StructuredQuestionsForm
+                      data={structuredQuestions}
+                      onSubmit={(ans) => respondToPermission(pendingPermission.id, JSON.stringify(ans))}
+                      onCancel={() => respondToPermission(pendingPermission.id, 'n')}
+                    />
+                  </>
+                );
+              }
+
+              // Giao diện Phê duyệt lệnh / Sửa đổi file ban đầu (HITL)
+              return (
+                <>
+                  <div className="flex items-center gap-2 text-amber-600 font-bold text-xs">
+                    <span className="animate-pulse">⚠️</span> YÊU CẦU PHÊ DUYỆT WORKFLOW
+                  </div>
+                  <p className="text-xs text-zinc-700 leading-relaxed font-semibold">
+                    {pendingPermission.query}
+                  </p>
+                  {pendingPermission.details && (
+                    <pre className="p-2.5 bg-zinc-50 border border-zinc-200 text-[10px] text-zinc-500 font-mono rounded overflow-auto max-h-32 whitespace-pre-wrap">
+                      {pendingPermission.details}
+                    </pre>
+                  )}
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 border-red-200 hover:bg-red-50 text-[10px] h-8 px-2.5 cursor-pointer"
+                      onClick={() => respondToPermission(pendingPermission.id, 'n')}
+                    >
+                      Từ chối
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50 text-[10px] h-8 px-2.5 cursor-pointer"
+                      onClick={() => respondToPermission(pendingPermission.id, 'y')}
+                    >
+                      Đồng ý (Yes)
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="text-[10px] h-8 px-2.5 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer border-none"
+                      onClick={() => respondToPermission(pendingPermission.id, 'a')}
+                    >
+                      Đồng ý tất cả
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

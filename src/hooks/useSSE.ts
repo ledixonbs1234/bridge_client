@@ -420,7 +420,7 @@ export function useSSE(onGenerationComplete?: () => void) {
     }
   }, [onGenerationComplete]);
 
-  const respondToPermission = useCallback(async (id: string, response: 'y' | 'n' | 'a') => {
+  const respondToPermission = useCallback(async (id: string, response: string) => {
     try {
       const res = await fetch('/api/dashboard/permission/respond', {
         method: 'POST',
