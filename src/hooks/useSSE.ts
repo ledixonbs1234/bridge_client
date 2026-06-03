@@ -268,9 +268,16 @@ export function useSSE(onGenerationComplete?: () => void) {
               if (tool.includes('bash') || tool.includes('command') || tool.includes('run') || tool.includes('terminal')) {
                 stepType = 'terminal';
                 cleanTitle = `Terminal ${parsed.input || 'Command'}`;
-              } else if (tool.includes('read') || tool.includes('view') || tool.includes('file') || tool.includes('list_directory') || tool.includes('dir')) {
+              } else if (tool.includes('list_directory') || tool.includes('dir') || tool === 'ls') {
                 stepType = 'read_file';
-                cleanTitle = `List Directory ${parsed.input || parsed.path || 'folder'}`;
+                const target = parsed.input || parsed.path || parsed.directory_path || parsed.arguments?.file_path || parsed.arguments?.directory || 'folder';
+                const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
+                cleanTitle = `📂 List Directory: ${displayTarget}`;
+              } else if (tool.includes('read') || tool.includes('view') || tool.includes('file') || tool === 'cat') {
+                stepType = 'read_file';
+                const target = parsed.input || parsed.path || parsed.file_path || parsed.arguments?.file_path || 'file';
+                const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
+                cleanTitle = `📄 Read File: ${displayTarget}`;
               } else if (tool.includes('search') || tool.includes('grep') || tool.includes('find')) {
                 stepType = 'search';
                 cleanTitle = `Search ${parsed.input || parsed.pattern || 'query'}`;

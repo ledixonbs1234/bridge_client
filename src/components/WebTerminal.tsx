@@ -7,6 +7,56 @@ import { marked } from 'marked';
 import { MermaidRenderer } from './MermaidRenderer';
 import { WorkspaceData } from '../App';
 
+
+interface FileContentViewerProps {
+  content: string;
+  filePath: string;
+  totalLines?: number | null;
+}
+
+const FileContentViewer = React.memo(function FileContentViewer({ content, filePath, totalLines }: FileContentViewerProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="border border-zinc-200 rounded-xl bg-white overflow-hidden shadow-xs my-1">
+      {/* Header Bar */}
+      <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-2 flex items-center justify-between select-none">
+        <div className="flex items-center gap-2 overflow-hidden mr-2">
+          <span className="text-xs shrink-0">📄</span>
+          <span className="text-[11px] font-bold text-zinc-700 font-mono truncate" title={filePath}>
+            {filePath || 'untitled-file'}
+          </span>
+          {totalLines && (
+            <span className="text-[9px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+              {totalLines} dòng
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="px-2 py-0.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 hover:text-zinc-800 rounded text-[10px] font-semibold cursor-pointer transition-colors shadow-xs shrink-0"
+        >
+          {copied ? 'Đã sao chép ✓' : 'Sao chép'}
+        </button>
+      </div>
+
+      {/* Code Text Area */}
+      <div className="p-4 bg-zinc-50/10 overflow-x-auto overflow-y-auto max-h-96 border-t border-zinc-100/30">
+        <pre className="text-xs text-zinc-750 whitespace-pre font-mono leading-relaxed text-left">
+          {content}
+        </pre>
+      </div>
+    </div>
+  );
+});
+FileContentViewer.displayName = "FileContentViewer";
 // =================================================================
 // 🎨 Component: Giao diện Wizard câu hỏi hiện đại của FluxMem
 // =================================================================
@@ -521,32 +571,54 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                       let isDir = false;
                       let dirPath = '';
                       let filesList: Array<{ name: string, type: string, path: string }> = [];
+                      let fileContent = '';
+                      let fileMeta: { file?: string; totalLines?: number } | null = null;
                       let rawText = step.output || '';
 
                       try {
                         const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
                         if (parsed && typeof parsed === 'object') {
                           const targetData = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
-                          if (targetData && typeof targetData === 'object' && Array.isArray(targetData.files)) {
-                            isDir = true;
-                            dirPath = targetData.path || '';
-                            filesList = targetData.files;
-                          } else {
-                            rawText = JSON.stringify(parsed, null, 2);
+                          if (targetData && typeof targetData === 'object') {
+                            if (Array.isArray(targetData.files)) {
+                              isDir = true;
+                              dirPath = targetData.path || '';
+                              filesList = targetData.files;
+                            } else if (targetData.content !== undefined) {
+                              fileContent = targetData.content;
+                              fileMeta = {
+                                file: targetData.file || targetData.file_path || '',
+                                totalLines: targetData.total_lines || null,
+                              };
+                            } else if (typeof targetData === 'string') {
+                              fileContent = targetData;
+                            } else {
+                              rawText = JSON.stringify(parsed, null, 2);
+                            }
                           }
                         }
                       } catch (e) {
-                        // ignore
+                        // Không phải định dạng JSON, giữ nguyên rawText
+                      }
+
+                      // Fallback nếu tool trả về text thô không có vỏ bọc JSON
+                      let displayContent = fileContent;
+                      if (!isDir && !displayContent && rawText) {
+                        const trimmed = rawText.trim();
+                        const isJson = (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'));
+                        if (!isJson) {
+                          displayContent = rawText;
+                        }
                       }
 
                       return (
                         <div className="space-y-1.5">
                           <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                            {isDir ? 'Directory Content' : 'File Content'}
+                            {isDir ? 'Danh sách thư mục' : 'Nội dung tập tin'}
                           </div>
 
                           {isDir ? (
-                            <div className="p-3.5 bg-white border border-zinc-205 rounded-xl max-h-96 overflow-y-auto space-y-2 shadow-xs text-left">
+                            <div className="p-3.5 bg-white border border-zinc-200 rounded-xl max-h-96 overflow-y-auto space-y-2 shadow-xs text-left">
                               {dirPath && (
                                 <div className="text-[11px] text-zinc-450 font-mono border-b border-zinc-100 pb-1.5 mb-2 truncate">
                                   📂 {dirPath}
@@ -572,9 +644,11 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                               </div>
                             </div>
                           ) : (
-                            <pre className="p-3 bg-white border border-zinc-200 rounded-xl text-xs text-zinc-700 whitespace-pre-wrap max-h-96 overflow-y-auto overflow-x-auto leading-relaxed font-mono shadow-xs text-left">
-                              {rawText || 'Đang tải nội dung file...'}
-                            </pre>
+                            <FileContentViewer
+                              content={displayContent || rawText}
+                              filePath={fileMeta?.file || step.title.replace('📄 Read File: ', '').replace('📄 Read File ', '')}
+                              totalLines={fileMeta?.totalLines}
+                            />
                           )}
                         </div>
                       );
