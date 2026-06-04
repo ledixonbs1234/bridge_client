@@ -5,8 +5,9 @@ import { Telemetry } from "./components/Telemetry";
 import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
 import { TelegramConfig } from "./components/TelegramConfig";
+import { SandboxManager } from "./components/SandboxManager";
 
-type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram";
+type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox";
 
 export interface WorkspaceData {
   success: boolean;
@@ -112,7 +113,7 @@ export default function App() {
   }, []);
 
   const handleEditGoal = () => {
-    const nextGoal = prompt("Nhập mục tiêu (Goal) mới cho Agent:", goal || "");
+    const nextGoal = prompt("Nhập mụcêu (Goal) mới cho Agent:", goal || "");
     if (nextGoal === null) return;
     fetch("/api/dashboard/goal", {
       method: "POST",
@@ -200,6 +201,13 @@ export default function App() {
                   }`}
               >
                 <span className="text-sm">🧠</span> Assets
+              </button>
+              <button
+                onClick={() => setActiveTab("sandbox")}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "sandbox" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
+                  }`}
+              >
+                <span className="text-sm">📦</span> Sandbox
               </button>
               <button
                 onClick={() => setActiveTab("telegram")}
@@ -298,7 +306,9 @@ export default function App() {
                           ? "Trace Viewer"
                           : activeTab === "memory"
                             ? "FluxMem Layer"
-                            : "Telegram Config"}
+                            : activeTab === "sandbox"
+                              ? "Git Sandbox Controller"
+                              : "Telegram Config"}
                     </h2>
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>
@@ -313,6 +323,7 @@ export default function App() {
                 {activeTab === "telemetry" && <Telemetry reloadTrigger={reloadTrigger} />}
                 {activeTab === "traces" && <TraceViewer reloadTrigger={reloadTrigger} />}
                 {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} />}
+                {activeTab === "sandbox" && <SandboxManager reloadTrigger={reloadTrigger} />}
                 {activeTab === "telegram" && <TelegramConfig />}
               </div>
             </div>

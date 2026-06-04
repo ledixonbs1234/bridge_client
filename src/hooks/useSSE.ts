@@ -6,6 +6,7 @@ export interface ExecutionStep {
   title: string;
   input?: string;
   output?: string;
+  toolName?: string; // Bổ sung để xác định chính xác công cụ được gọi
 }
 
 export interface TimelineItem {
@@ -53,7 +54,6 @@ export function useSSE(onGenerationComplete?: () => void) {
             content: m.content,
             image: m.image || undefined,
             steps: m.steps || [],
-            // SỬA: Bảo toàn cấu trúc timeline nguyên bản đã được lưu ở backend
             timeline: m.timeline || undefined
           }));
           setMessages(loadedMessages);
@@ -273,6 +273,12 @@ export function useSSE(onGenerationComplete?: () => void) {
                 const target = parsed.input || parsed.path || parsed.directory_path || parsed.arguments?.file_path || parsed.arguments?.directory || 'folder';
                 const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
                 cleanTitle = `📂 List Directory: ${displayTarget}`;
+              } else if (tool === 'write_file' || tool.includes('write') || tool.includes('replace') || tool.includes('edit')) {
+                // Ưu tiên check các công cụ sửa đổi tệp nguồn trước để tránh trùng lặp với check 'file' bên dưới
+                stepType = 'generic';
+                const target = parsed.input || parsed.file_path || 'file';
+                const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
+                cleanTitle = `📝 Modify File: ${displayTarget}`;
               } else if (tool.includes('read') || tool.includes('view') || tool.includes('file') || tool === 'cat') {
                 stepType = 'read_file';
                 const target = parsed.input || parsed.path || parsed.file_path || parsed.arguments?.file_path || 'file';
@@ -287,7 +293,8 @@ export function useSSE(onGenerationComplete?: () => void) {
                 id: parsed.step_id || Math.random().toString(36).substring(2, 9),
                 type: stepType,
                 title: cleanTitle,
-                input: parsed.input || parsed.details || ''
+                input: parsed.input || parsed.details || '',
+                toolName: tool
               };
 
               currentSteps.push(newStep);

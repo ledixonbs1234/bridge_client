@@ -7,7 +7,6 @@ import { marked } from 'marked';
 import { MermaidRenderer } from './MermaidRenderer';
 import { WorkspaceData } from '../App';
 
-
 interface FileContentViewerProps {
   content: string;
   filePath: string;
@@ -57,6 +56,125 @@ const FileContentViewer = React.memo(function FileContentViewer({ content, fileP
   );
 });
 FileContentViewer.displayName = "FileContentViewer";
+
+// =================================================================
+// 🎨 Component: Git Sandbox Diff Viewer
+// =================================================================
+interface DiffViewerProps {
+  filePath: string;
+}
+
+const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps) {
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDiff = useCallback(() => {
+    setLoading(true);
+    fetch('/api/dashboard/code-changes')
+      .then((res) => {
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (data.success && Array.isArray(data.changes)) {
+          const cleanPath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+          const pathBasename = (p: string) => p.split('/').pop() || '';
+
+          const matched = data.changes.find((c: any) => {
+            const cFile = cleanPath(c.file);
+            const fFile = cleanPath(filePath);
+            return cFile.endsWith(fFile) || fFile.endsWith(cFile) || pathBasename(cFile) === pathBasename(fFile);
+          });
+
+          if (matched && matched.diff) {
+            setDiffText(matched.diff);
+          } else {
+            setDiffText(null);
+          }
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [filePath]);
+
+  useEffect(() => {
+    fetchDiff();
+  }, [fetchDiff]);
+
+  if (loading) {
+    return (
+      <div className="text-zinc-400 text-xs italic py-2 select-none">
+        ⌛ Đang so sánh thay đổi với Git Worktree...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-500 text-xs py-2 select-none">
+        ❌ Không thể tải Git Diff: {error}
+      </div>
+    );
+  }
+
+  if (!diffText) {
+    return (
+      <div className="text-zinc-500 text-xs italic bg-zinc-50 p-3 rounded-lg border border-zinc-200 select-none">
+        ℹ️ Không có thay đổi so với phiên bản gốc (Git Worktree sạch).
+      </div>
+    );
+  }
+
+  const lines = diffText.split('\n');
+
+  return (
+    <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white shadow-xs my-1 select-text">
+      <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-2 flex items-center justify-between select-none">
+        <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+          <span>📊</span> Git Sandbox Diff
+        </span>
+        <button
+          type="button"
+          onClick={fetchDiff}
+          className="text-[10px] text-blue-600 hover:text-blue-500 font-semibold cursor-pointer"
+        >
+          Nạp lại 🔄
+        </button>
+      </div>
+      <div className="p-3 bg-zinc-900 text-zinc-100 overflow-x-auto max-h-96 font-mono text-xs leading-relaxed border-t border-zinc-800">
+        {lines.map((line, idx) => {
+          let colorClass = "text-zinc-300";
+          let bgClass = "";
+
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            colorClass = "text-emerald-400";
+            bgClass = "bg-emerald-950/40 border-l-2 border-emerald-500 pl-1";
+          } else if (line.startsWith('-') && !line.startsWith('---')) {
+            colorClass = "text-rose-400";
+            bgClass = "bg-rose-950/40 border-l-2 border-rose-500 pl-1";
+          } else if (line.startsWith('@@')) {
+            colorClass = "text-cyan-400";
+            bgClass = "bg-cyan-950/30 border-l-2 border-cyan-500 pl-1";
+          } else if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
+            colorClass = "text-zinc-500 font-bold italic";
+          }
+
+          return (
+            <div key={idx} className={`whitespace-pre py-0.5 ${bgClass} ${colorClass}`}>
+              {line}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+DiffViewer.displayName = "DiffViewer";
+
 // =================================================================
 // 🎨 Component: Giao diện Wizard câu hỏi hiện đại của FluxMem
 // =================================================================
@@ -66,7 +184,6 @@ interface QuestionOption {
   is_default?: boolean;
 }
 
-// 2. Định nghĩa Interface cấu trúc cho từng câu hỏi
 interface QuestionItem {
   id: string;
   question: string;
@@ -78,14 +195,13 @@ interface QuestionItem {
 interface StructuredQuestionsFormProps {
   data: {
     explanation: string;
-    questions: any; // Chấp nhận string hoặc array ở mức runtime
+    questions: any;
   };
   onSubmit: (answers: Record<string, any>) => void;
   onCancel: () => void;
 }
 
 const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ data, onSubmit, onCancel }: StructuredQuestionsFormProps) {
-  // Giải tuần tự hóa an toàn câu hỏi và chỉ định rõ kiểu dữ liệu trả về là mảng QuestionItem[]
   const questionsArray = useMemo<QuestionItem[]>(() => {
     let q = data.questions;
     if (typeof q === 'string') {
@@ -98,7 +214,6 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
     return Array.isArray(q) ? (q as QuestionItem[]) : [];
   }, [data.questions]);
 
-  // Khởi tạo các câu trả lời mặc định với kiểu dữ liệu tường minh trong callback
   const [formState, setFormState] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     questionsArray.forEach((q: QuestionItem) => {
@@ -148,13 +263,11 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Khối giải thích bối cảnh kỹ thuật */}
       <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 shadow-inner">
         <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1">💡 GIẢI THÍCH NGỮ CẢNH CỦA AGENT</span>
         <p className="text-xs text-zinc-700 leading-relaxed font-semibold">{data.explanation}</p>
       </div>
 
-      {/* Danh sách câu hỏi cuộn dọc */}
       <div className="space-y-5 divide-y divide-zinc-100 max-h-[380px] overflow-y-auto pr-1">
         {questionsArray.map((q: QuestionItem, idx: number) => (
           <div key={q.id} className={`pt-4 ${idx === 0 ? 'pt-0 border-none' : ''}`}>
@@ -163,7 +276,6 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
               {q.question}
             </label>
 
-            {/* Kiểu câu hỏi: SELECT (Chọn 1) */}
             {q.type === 'select' && (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
@@ -214,7 +326,7 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
                         value={customValues[q.id] || ''}
                         onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
                         placeholder="Nhập phương án tự định nghĩa của bạn..."
-                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs"
+                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs"
                       />
                     </motion.div>
                   )}
@@ -222,7 +334,6 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
               </div>
             )}
 
-            {/* Kiểu câu hỏi: MULTI_SELECT (Chọn nhiều) */}
             {q.type === 'multi_select' && (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
@@ -270,7 +381,7 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
                         value={customValues[q.id] || ''}
                         onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
                         placeholder="Nhập phương án tự định nghĩa bổ sung..."
-                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs"
+                        className="w-full mt-2 px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs"
                       />
                     </motion.div>
                   )}
@@ -278,7 +389,6 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
               </div>
             )}
 
-            {/* Kiểu câu hỏi: TEXT (Văn bản tự do) */}
             {q.type === 'text' && (
               <textarea
                 required
@@ -286,14 +396,13 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
                 onChange={(e) => setFormState(prev => ({ ...prev, [q.id]: e.target.value }))}
                 placeholder="Nhập câu trả lời chi tiết của bạn..."
                 rows={3}
-                className="w-full px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs text-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none shadow-xs resize-none"
+                className="w-full px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs resize-none"
               />
             )}
           </div>
         ))}
       </div>
 
-      {/* Hành động gửi/hủy ở cuối form */}
       <div className="flex gap-2 justify-end border-t border-zinc-150 pt-4 mt-2">
         <Button
           variant="outline"
@@ -375,14 +484,11 @@ function parseContentAndMermaid(content: string) {
   return parts;
 }
 
-// Thay đổi signature nhận thêm tham số msgIdx
 const getMessageTimeline = (msg: ChatMessage, msgIdx: number): TimelineItem[] => {
-  // Nếu tin nhắn có lưu timeline (sau khi đã áp dụng Bước 1), trả về luôn để giữ đúng thứ tự hiển thị
   if (msg.timeline && msg.timeline.length > 0) {
     return msg.timeline;
   }
 
-  // Phương án dự phòng (Fallback) nếu timeline trống
   const reconstructed: TimelineItem[] = [];
   if (msg.steps && msg.steps.length > 0) {
     reconstructed.push({
@@ -435,16 +541,16 @@ const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
   );
 });
 TimelineTextBlock.displayName = "TimelineTextBlock";
+
 interface CollapsibleStepsProps {
   steps: ExecutionStep[];
   forceExpand?: boolean;
 }
-// Đã tối ưu hóa giao diện nút gộp (màu xanh nước biển có mũi tên trắng xoay góc) giống y hệt như hình ảnh yêu cầu
+
 const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpand = false }: CollapsibleStepsProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
 
-  // Tự động mở rộng khi AI đang xử lý và thu gọn lại khi xử lý xong
   useEffect(() => {
     if (forceExpand) {
       setIsCollapsed(false);
@@ -516,55 +622,54 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                       </div>
                     )}
 
-                    {
-                      step.type === 'terminal' && (() => {
-                        let outputText = step.output || '';
-                        try {
-                          const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
-                          if (parsed && typeof parsed === 'object') {
-                            if (parsed.status === 'success' && parsed.data) {
-                              if (parsed.data.stdout !== undefined || parsed.data.stderr !== undefined) {
-                                outputText = (parsed.data.stdout || '') + (parsed.data.stderr || '');
-                              } else if (typeof parsed.data === 'string') {
-                                outputText = parsed.data;
-                              } else {
-                                outputText = JSON.stringify(parsed.data, null, 2);
-                              }
-                            } else if (parsed.status === 'error') {
-                              outputText = parsed.error_message || parsed.rawText || JSON.stringify(parsed, null, 2);
+                    {step.type === 'terminal' && (() => {
+                      let outputText = step.output || '';
+                      try {
+                        const parsed = typeof step.output === 'string' ? JSON.parse(step.output) : step.output;
+                        if (parsed && typeof parsed === 'object') {
+                          if (parsed.status === 'success' && parsed.data) {
+                            if (parsed.data.stdout !== undefined || parsed.data.stderr !== undefined) {
+                              outputText = (parsed.data.stdout || '') + (parsed.data.stderr || '');
+                            } else if (typeof parsed.data === 'string') {
+                              outputText = parsed.data;
+                            } else {
+                              outputText = JSON.stringify(parsed.data, null, 2);
                             }
+                          } else if (parsed.status === 'error') {
+                            outputText = parsed.error_message || parsed.rawText || JSON.stringify(parsed, null, 2);
                           }
-                        } catch (e) {
-                          // ignore
                         }
+                      } catch (e) {
+                        // ignore
+                      }
 
-                        return (
-                          <div className="space-y-1.5">
-                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Terminal Console</div>
-                            <div
-                              style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
-                              className="p-4 border rounded-xl text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap shadow-xs"
-                            >
-                              <div className="flex items-start gap-2 mb-2.5 pb-2 border-b border-zinc-100">
-                                <span className="text-emerald-600 font-bold select-none shrink-0" style={{ color: '#059669' }}>$</span>
-                                <span className="font-semibold break-all" style={{ color: '#2563eb' }}>
-                                  {step.input}
-                                </span>
-                              </div>
-
-                              {outputText ? (
-                                <div className="text-zinc-800 max-h-72 overflow-y-auto whitespace-pre-wrap leading-normal" style={{ color: '#27272a' }}>
-                                  {outputText}
-                                </div>
-                              ) : (
-                                <div className="text-zinc-400 italic select-none" style={{ color: '#a1a1aa' }}>
-                                  Command executed / awaiting response...
-                                </div>
-                              )}
+                      return (
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Terminal Console</div>
+                          <div
+                            style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
+                            className="p-4 border rounded-xl text-xs font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap shadow-xs"
+                          >
+                            <div className="flex items-start gap-2 mb-2.5 pb-2 border-b border-zinc-100">
+                              <span className="text-emerald-600 font-bold select-none shrink-0" style={{ color: '#059669' }}>$</span>
+                              <span className="font-semibold break-all" style={{ color: '#2563eb' }}>
+                                {step.input}
+                              </span>
                             </div>
+
+                            {outputText ? (
+                              <div className="text-zinc-800 max-h-72 overflow-y-auto whitespace-pre-wrap leading-normal" style={{ color: '#27272a' }}>
+                                {outputText}
+                              </div>
+                            ) : (
+                              <div className="text-zinc-400 italic select-none" style={{ color: '#a1a1aa' }}>
+                                Command executed / awaiting response...
+                              </div>
+                            )}
                           </div>
-                        );
-                      })()
+                        </div>
+                      );
+                    })()
                     }
 
                     {step.type === 'read_file' && (() => {
@@ -598,10 +703,9 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                           }
                         }
                       } catch (e) {
-                        // Không phải định dạng JSON, giữ nguyên rawText
+                        // ignore
                       }
 
-                      // Fallback nếu tool trả về text thô không có vỏ bọc JSON
                       let displayContent = fileContent;
                       if (!isDir && !displayContent && rawText) {
                         const trimmed = rawText.trim();
@@ -677,12 +781,21 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                       <div className="space-y-3.5">
                         {step.input && (
                           <div className="space-y-1.5">
-                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Input</div>
+                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">File Path / Input</div>
                             <pre className="p-3 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-650 whitespace-pre-wrap">
                               {step.input}
                             </pre>
                           </div>
                         )}
+
+                        {/* HIỂN THỊ DIFF TỰ ĐỘNG CHO WRITE VÀ REPLACE */}
+                        {(step.toolName === 'write_file' || step.toolName === 'replace_by_lines_safe' || step.title.toLowerCase().includes('write_file') || step.title.toLowerCase().includes('replace_by_lines_safe')) && step.input && (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Git Sandbox Diff</div>
+                            <DiffViewer filePath={step.input} />
+                          </div>
+                        )}
+
                         {step.output && (
                           <div className="space-y-1.5">
                             <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Result</div>
@@ -960,8 +1073,8 @@ interface WebTerminalProps {
 
 export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData }: WebTerminalProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const innerContainerRef = useRef<HTMLDivElement>(null); // THÊM: Theo dõi chiều cao thực tế của nội dung
-  const lastScrollTopRef = useRef<number>(0); // THÊM: Theo dõi hướng cuộn của người dùng
+  const innerContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef<number>(0);
   const shouldAutoScrollRef = useRef<boolean>(true);
 
   const [realProviders, setRealProviders] = useState<ProviderInfo[]>([]);
@@ -973,7 +1086,6 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
   const lastValidatedMessageRef = useRef<string | null>(null);
   const fixAttemptsRef = useRef<number>(0);
 
-  // SỬA ĐỔI: Logic kiểm tra hướng cuộn thông minh để không tắt nhầm auto-scroll khi chiều cao thay đổi
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -981,7 +1093,6 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
     const currentScrollTop = container.scrollTop;
     const isScrollingUp = currentScrollTop < lastScrollTopRef.current;
 
-    // Lưu lại vị trí cuộn cuối cùng
     lastScrollTopRef.current = currentScrollTop;
 
     const threshold = 100;
@@ -990,12 +1101,10 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
     if (isNearBottom) {
       shouldAutoScrollRef.current = true;
     } else if (isScrollingUp) {
-      // Chỉ tắt auto-scroll khi người dùng thực sự chủ động cuộn chuột ngược lên trên
       shouldAutoScrollRef.current = false;
     }
   };
 
-  // THÊM: Sử dụng ResizeObserver để tự động cuộn khi bất kỳ nội dung nào (text, steps, mermaid) thay đổi kích thước
   useEffect(() => {
     const innerContainer = innerContainerRef.current;
     if (!innerContainer) return;
@@ -1193,12 +1302,11 @@ ${block}
 
                     {msg.role === 'assistant' ? (
                       <div className="space-y-3 w-full flex flex-col items-start">
-                        {/* SỬA: Truyền thêm chỉ số idx vào getMessageTimeline */}
                         {getMessageTimeline(msg, idx).map((item) => {
                           if (item.type === 'steps' && item.steps && item.steps.length > 0) {
                             return (
                               <CollapsibleSteps
-                                key={item.id} // Lúc này key item.id đã hoàn toàn ổn định qua các lần re-render
+                                key={item.id}
                                 steps={item.steps}
                                 forceExpand={isCurrentlyGeneratingThis}
                               />
@@ -1236,11 +1344,9 @@ ${block}
 
         {pendingPermission && (
           <div className="mx-6 mb-4 p-5 bg-white border border-zinc-200 rounded-2xl space-y-4 shadow-lg text-left relative overflow-hidden">
-            {/* Thanh màu chỉ báo hành động khẩn cấp */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-amber-500" />
 
             {(() => {
-              // Thử nghiệm parse dữ liệu bối cảnh xem có phải gói tin câu hỏi có cấu trúc không
               let structuredQuestions = null;
               if (pendingPermission.details && pendingPermission.details.trim().startsWith('{')) {
                 try {
@@ -1249,7 +1355,7 @@ ${block}
                     structuredQuestions = parsed;
                   }
                 } catch (e) {
-                  // Fallback về cách hiển thị nhật ký logs thô ban đầu
+                  // ignore
                 }
               }
 
@@ -1268,7 +1374,6 @@ ${block}
                 );
               }
 
-              // Giao diện Phê duyệt lệnh / Sửa đổi file ban đầu (HITL)
               return (
                 <>
                   <div className="flex items-center gap-2 text-amber-600 font-bold text-xs">
