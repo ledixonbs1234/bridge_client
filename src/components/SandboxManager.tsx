@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { Button } from "./animate-ui/button";
 
-interface Sandbox {
-    id: number;
-    task_id: string;
-    branch: string;
-    worktree: string;
-    status: "active" | "accepted" | "rejected" | string;
-    parent_branch: string;
-    created_at: string;
+interface ShadowChange {
+    file: string;
+    absolute_path: string;
+    status: "added" | "modified" | "deleted" | string;
+    additions: number;
+    deletions: number;
+    diff: string;
 }
 
 interface SandboxManagerProps {
@@ -16,29 +15,25 @@ interface SandboxManagerProps {
 }
 
 export function SandboxManager({ reloadTrigger }: SandboxManagerProps) {
-    const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
-    const [activeWorkspace, setActiveWorkspace] = useState<string>("");
-    const [isIsolated, setIsIsolated] = useState<boolean>(false);
+    const [changes, setChanges] = useState<ShadowChange[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [selectedDiff, setSelectedDiff] = useState<ShadowChange | null>(null);
 
     useEffect(() => {
-        loadSandboxes();
+        loadShadowChanges();
     }, [reloadTrigger]);
 
-    const loadSandboxes = () => {
+    const loadShadowChanges = () => {
         setLoading(true);
-        fetch("/api/dashboard/sandboxes")
+        fetch("/api/dashboard/shadow-changes")
             .then((res) => {
                 if (!res.ok) throw new Error("Không thể kết nối đến máy chủ");
                 return res.json();
             })
             .then((data) => {
                 if (data.success) {
-                    setSandboxes(data.sandboxes || []);
-                    setActiveWorkspace(data.active_workspace || "");
-                    setIsIsolated(data.is_isolated || false);
+                    setChanges(data.changes || []);
                 }
                 setLoading(false);
             })
@@ -48,106 +43,36 @@ export function SandboxManager({ reloadTrigger }: SandboxManagerProps) {
             });
     };
 
-    const handleAccept = (taskId: string) => {
-        if (!confirm(`Bạn có chắc chắn muốn trộn thay đổi từ Sandbox ${taskId} vào nhánh chính không?\nThao tác này sẽ tự động commit code cát và dọn dẹp worktree.`)) return;
-        setActionLoading(taskId);
-        fetch("/api/dashboard/sandboxes/accept", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskId }),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.status === "success") {
-                    alert(data.message);
-                    loadSandboxes();
-                } else {
-                    throw new Error(data.error_message || data.error);
-                }
-            })
-            .catch((err) => alert("Lỗi khi trộn code: " + err.message))
-            .finally(() => setActionLoading(null));
-    };
-
-    const handleReject = (taskId: string) => {
-        if (!confirm(`Bạn có chắc chắn muốn hủy bỏ toàn bộ thay đổi của Sandbox ${taskId} không?\nSơ đồ worktree và branch của task này sẽ bị xóa hoàn toàn.`)) return;
-        setActionLoading(taskId);
-        fetch("/api/dashboard/sandboxes/reject", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskId }),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.status === "success") {
-                    alert(data.message);
-                    loadSandboxes();
-                } else {
-                    throw new Error(data.error_message || data.error);
-                }
-            })
-            .catch((err) => alert("Lỗi khi hủy sandbox: " + err.message))
-            .finally(() => setActionLoading(null));
-    };
-
-    const handleCreateManual = () => {
-        setLoading(true);
-        fetch("/api/dashboard/sandboxes/create", { method: "POST" })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) {
-                    alert("Đã khởi tạo Sandbox Git Worktree mới thành công!");
-                    loadSandboxes();
-                } else {
-                    throw new Error(data.error);
-                }
-            })
-            .catch((err) => alert("Lỗi tạo sandbox: " + err.message))
-            .finally(() => setLoading(false));
-    };
-
-    if (loading && sandboxes.length === 0) {
-        return <div className="text-zinc-500 text-sm text-left">Đang tải trạng thái Sandbox...</div>;
+    if (loading && changes.length === 0) {
+        return <div className="text-zinc-500 text-sm text-left">Đang tải danh sách Giao dịch tệp (Shadow Files)...</div>;
     }
 
     if (error) {
         return (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-left font-mono">
-                ❌ Lỗi nạp Git Sandbox: {error}
+                ❌ Lỗi nạp dữ liệu Shadow Files: {error}
             </div>
         );
     }
 
     return (
         <div className="space-y-6 text-left text-zinc-800 animate-fade-in">
-            <div className="flex justify-between items-center bg-zinc-50 border border-zinc-200 p-4 rounded-xl shadow-xs">
-                <div>
-                    <h3 className="text-xs text-zinc-400 uppercase tracking-wider mb-1">Thư mục hiện hành (Workspace)</h3>
-                    <div className="text-sm font-mono font-bold text-zinc-800 break-all select-all">{activeWorkspace}</div>
-                    <div className="flex items-center gap-1.5 mt-2">
-                        <span className={`w-2 h-2 rounded-full ${isIsolated ? 'bg-amber-500 glow-amber animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
-                        <span className="text-[10px] text-zinc-500 font-semibold uppercase">
-                            {isIsolated ? "ĐANG CHẠY TRONG SANDBOX CÁCH LY" : "WORKSPACE GỐC (CHƯA CÁCH LY)"}
-                        </span>
-                    </div>
-                </div>
-
-                <Button
-                    onClick={handleCreateManual}
-                    disabled={isIsolated}
-                    variant="default"
-                    className="text-xs font-semibold h-9 px-4 shrink-0 cursor-pointer"
-                >
-                    📦 Tạo Sandbox mới
-                </Button>
+            {/* System explanation card */}
+            <div className="bg-zinc-50 border border-zinc-200 p-5 rounded-xl shadow-xs space-y-3">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🛡️</span> Cơ chế bảo vệ tệp tin tự động (Shadow Transaction)
+                </h3>
+                <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+                    Hệ thống tự động chụp nhanh snapshot mã nguồn nguyên bản trước khi AI thực thi bất kỳ thao tác chỉnh sửa tệp tin nào. Nếu có lỗi cú pháp hoặc lỗi logic từ kết quả kiểm duyệt (Validator), hệ thống sẽ lập tức khôi phục (rollback) nguyên trạng tệp tin để bảo vệ dự án tối đa mà không phụ thuộc vào Git Worktree cồng kềnh.
+                </p>
             </div>
 
             <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-xs">
                 <div className="p-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50/50">
                     <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Git Sandbox Logs & Worktrees
+                        Giao dịch tệp nguồn đang hoạt động (Active Shadow Files)
                     </h3>
-                    <button onClick={loadSandboxes} className="text-xs text-blue-600 hover:underline cursor-pointer">
+                    <button onClick={loadShadowChanges} className="text-xs text-blue-600 hover:underline cursor-pointer">
                         Làm mới dữ liệu
                     </button>
                 </div>
@@ -155,76 +80,61 @@ export function SandboxManager({ reloadTrigger }: SandboxManagerProps) {
                     <table className="w-full text-xs text-zinc-700">
                         <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500">
                             <tr>
-                                <th className="p-3 font-semibold text-left border-zinc-200">Task ID</th>
-                                <th className="p-3 font-semibold text-left border-zinc-200">Trạng thái</th>
-                                <th className="p-3 font-semibold text-left border-zinc-200">Nhánh cát (Branch)</th>
-                                <th className="p-3 font-semibold text-left border-zinc-200">Nhánh gốc (Parent)</th>
-                                <th className="p-3 font-semibold text-left border-zinc-200">Đường dẫn Sandbox (Worktree)</th>
+                                <th className="p-3 font-semibold text-left border-zinc-200">Tên tệp tin</th>
+                                <th className="p-3 font-semibold text-left border-zinc-200">Trạng thái sửa đổi</th>
+                                <th className="p-3 font-semibold text-left border-zinc-200">Thay đổi dòng</th>
+                                <th className="p-3 font-semibold text-left border-zinc-200">Đường dẫn tệp tin thực tế (Absolute Path)</th>
                                 <th className="p-3 font-semibold text-center border-zinc-200">Hành động</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-200">
-                            {sandboxes.map((s) => {
-                                const isActive = s.status === "active";
+                            {changes.map((c, idx) => {
+                                const isModified = c.status === "modified";
+                                const isAdded = c.status === "added";
                                 return (
-                                    <tr key={s.id} className="hover:bg-zinc-50/50">
+                                    <tr key={idx} className="hover:bg-zinc-50/50">
                                         <td className="p-3 font-mono font-bold text-zinc-900 text-left border-zinc-200">
-                                            {s.task_id}
+                                            {c.file.split('/').pop()}
                                         </td>
                                         <td className="p-3 text-left border-zinc-200">
                                             <span
-                                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${isActive
+                                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${isModified
                                                     ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                                    : s.status === "accepted"
+                                                    : isAdded
                                                         ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                                                         : "bg-red-100 text-red-800 border border-red-200"
                                                     }`}
                                             >
-                                                {s.status}
+                                                {c.status}
                                             </span>
                                         </td>
-                                        <td className="p-3 font-mono text-blue-600 text-left border-zinc-200">
-                                            {s.branch}
+                                        <td className="p-3 font-mono text-left border-zinc-200">
+                                            <span className="flex gap-2">
+                                                {c.additions > 0 && <span className="text-emerald-600 font-bold">+{c.additions}</span>}
+                                                {c.deletions > 0 && <span className="text-rose-600 font-bold">-{c.deletions}</span>}
+                                                {c.additions === 0 && c.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
+                                            </span>
                                         </td>
-                                        <td className="p-3 font-mono text-zinc-500 text-left border-zinc-200">
-                                            {s.parent_branch || "main"}
-                                        </td>
-                                        <td className="p-3 font-mono text-zinc-500 truncate max-w-xs text-left border-zinc-200" title={s.worktree}>
-                                            {s.worktree}
+                                        <td className="p-3 font-mono text-zinc-500 truncate max-w-xs text-left border-zinc-200" title={c.absolute_path}>
+                                            {c.absolute_path}
                                         </td>
                                         <td className="p-3 text-center border-zinc-200">
-                                            {isActive ? (
-                                                <div className="flex gap-1.5 justify-center">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleAccept(s.task_id)}
-                                                        disabled={actionLoading !== null}
-                                                        className="h-7 text-[10px] font-semibold text-emerald-600 border-emerald-200 hover:bg-emerald-50 cursor-pointer animate-fade-in"
-                                                    >
-                                                        {actionLoading === s.task_id ? "..." : "✓ Đồng ý (Merge)"}
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleReject(s.task_id)}
-                                                        disabled={actionLoading !== null}
-                                                        className="h-7 text-[10px] font-semibold text-red-600 border-red-200 hover:bg-red-50 cursor-pointer animate-fade-in"
-                                                    >
-                                                        {actionLoading === s.task_id ? "..." : "✗ Hủy bỏ (Reject)"}
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] text-zinc-400 font-medium">Đã dọn dẹp</span>
-                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => setSelectedDiff(c)}
+                                                className="h-7 text-[10px] font-semibold text-blue-600 border-blue-200 hover:bg-blue-50 cursor-pointer animate-fade-in"
+                                            >
+                                                🔍 Xem chi tiết Diff
+                                            </Button>
                                         </td>
                                     </tr>
                                 );
                             })}
-                            {sandboxes.length === 0 && (
+                            {changes.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-zinc-400 border-zinc-200 bg-white">
-                                        Chưa có Sandbox nào từng được khởi tạo.
+                                    <td colSpan={5} className="p-8 text-center text-zinc-400 border-zinc-200 bg-white">
+                                        Hiện tại không có tệp tin nào đang được cách ly sửa đổi bằng Shadow Files.
                                     </td>
                                 </tr>
                             )}
@@ -232,6 +142,52 @@ export function SandboxManager({ reloadTrigger }: SandboxManagerProps) {
                     </table>
                 </div>
             </div>
+
+            {/* Detailed Diff Panel */}
+            {selectedDiff && (
+                <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white shadow-xs animate-fade-in">
+                    <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-3 flex justify-between items-center select-none">
+                        <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                            <span>📊</span> So sánh Diff tệp: <code className="text-blue-600">{selectedDiff.file}</code>
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedDiff(null)}
+                            className="text-xs text-zinc-500 hover:text-zinc-800 font-semibold cursor-pointer"
+                        >
+                            Ẩn Diff [x]
+                        </button>
+                    </div>
+                    <div className="p-4 bg-zinc-900 text-zinc-100 overflow-x-auto max-h-96 font-mono text-xs leading-relaxed text-left border-t border-zinc-800">
+                        {selectedDiff.diff ? (
+                            <div className="divide-y divide-zinc-850/10">
+                                {selectedDiff.diff.split('\n').map((line, idx) => {
+                                    let colorClass = "text-zinc-300";
+                                    let bgClass = "";
+
+                                    if (line.startsWith('+') && !line.startsWith('+++')) {
+                                        colorClass = "text-emerald-400";
+                                        bgClass = "bg-emerald-950/30 border-l-2 border-emerald-500 pl-3";
+                                    } else if (line.startsWith('-') && !line.startsWith('---')) {
+                                        colorClass = "text-rose-400";
+                                        bgClass = "bg-rose-950/30 border-l-2 border-rose-500 pl-3";
+                                    } else {
+                                        bgClass = "pl-3 opacity-80";
+                                    }
+
+                                    return (
+                                        <div key={idx} className={`whitespace-pre py-0.5 ${bgClass} ${colorClass}`}>
+                                            {line}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-zinc-400 italic text-center py-6">Không có thay đổi nào trong tệp này.</div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,3 +1,4 @@
+// filepath: bridge_client/src/App.tsx
 import { useState, useEffect } from "react";
 import { useSSE } from "./hooks/useSSE";
 import { WebTerminal } from "./components/WebTerminal";
@@ -60,11 +61,21 @@ export interface WorkspaceData {
   };
 }
 
+interface ShadowChange {
+  file: string;
+  absolute_path: string;
+  status: "added" | "modified" | "deleted" | string;
+  additions: number;
+  deletions: number;
+  diff: string;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabPanel>("terminal");
   const [goal, setGoal] = useState<string | null>(null);
 
-  const [activeAgent, setActiveAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
+  // Giữ nguyên State mặc định để truyền cấu hình an toàn cho WebTerminal
+  const [activeAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
   const [activeModel, setActiveModel] = useState<string>("MiniMax-M3");
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
@@ -74,9 +85,14 @@ export default function App() {
   // State quản lý trạng thái kết nối của Bridge Server
   const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
 
+  // State theo dõi các tệp tin thay đổi trong Sandbox thông qua Shadow Files
+  const [shadowChanges, setShadowChanges] = useState<ShadowChange[]>([]);
+  const [selectedDiff, setSelectedDiff] = useState<ShadowChange | null>(null);
+
   const sse = useSSE(() => {
     setReloadTrigger((prev) => prev + 1);
     fetchWorkspace();
+    fetchShadowChanges();
   });
 
   const fetchWorkspace = () => {
@@ -88,7 +104,7 @@ export default function App() {
       .then((data) => {
         if (data.success) {
           setWorkspaceData(data);
-          setIsServerConnected(true); // Kết nối hoạt động tốt
+          setIsServerConnected(true);
           if (data.provider) {
             setActiveModel(data.provider.model);
           }
@@ -96,8 +112,19 @@ export default function App() {
       })
       .catch((err) => {
         console.error("Error reading active workspace state:", err);
-        setIsServerConnected(false); // Đánh dấu mất kết nối để hiển thị cảnh báo
+        setIsServerConnected(false);
       });
+  };
+
+  const fetchShadowChanges = () => {
+    fetch("/api/dashboard/shadow-changes")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setShadowChanges(data.changes || []);
+        }
+      })
+      .catch((err) => console.error("Error fetching shadow changes:", err));
   };
 
   useEffect(() => {
@@ -107,13 +134,32 @@ export default function App() {
       .catch(() => setIsServerConnected(false));
 
     fetchWorkspace();
+    fetchShadowChanges();
 
-    const interval = setInterval(fetchWorkspace, 3000);
+    const interval = setInterval(() => {
+      fetchWorkspace();
+      fetchShadowChanges();
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
+  // Xử lý phím Escape để đóng nhanh cửa sổ Diff Modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedDiff(null);
+      }
+    };
+    if (selectedDiff) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedDiff]);
+
   const handleEditGoal = () => {
-    const nextGoal = prompt("Nhập mụcêu (Goal) mới cho Agent:", goal || "");
+    const nextGoal = prompt("Nhập mục tiêu (Goal) mới cho Agent:", goal || "");
     if (nextGoal === null) return;
     fetch("/api/dashboard/goal", {
       method: "POST",
@@ -154,7 +200,7 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden h-full">
         {/* PERSISTENT LIGHT SIDEBAR */}
-        <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700">
+        <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700 overflow-y-auto">
           <div className="p-4 space-y-6">
             <div className="flex items-center gap-2 px-1">
               <span className="text-blue-600 font-bold text-lg animate-pulse">⚡</span>
@@ -207,7 +253,7 @@ export default function App() {
                 className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "sandbox" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
                   }`}
               >
-                <span className="text-sm">📦</span> Sandbox
+                <span className="text-sm">🛡️</span> Shadow Files
               </button>
               <button
                 onClick={() => setActiveTab("telegram")}
@@ -218,35 +264,7 @@ export default function App() {
               </button>
             </nav>
 
-            {/* MORE SECTION */}
-            <div className="space-y-1.5">
-              <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">More</span>
-              <div className="space-y-1">
-                <button
-                  onClick={() => {
-                    setActiveAgent("MaxHermes");
-                    setActiveTab("terminal");
-                  }}
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-left rounded-lg transition-colors cursor-pointer ${activeAgent === "MaxHermes" && activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-bold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                    }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#5046e5]" />
-                  <span>MaxHermes</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveAgent("MaxClaw");
-                    setActiveTab("terminal");
-                  }}
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs text-left rounded-lg transition-colors cursor-pointer ${activeAgent === "MaxClaw" && activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-bold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                    }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#8b5cf6]" />
-                  <span>MaxClaw</span>
-                </button>
-              </div>
-            </div>
-
+            {/* CURRENT GOAL SECTION */}
             <div className="space-y-1.5">
               <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Current Goal</span>
               <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
@@ -254,20 +272,50 @@ export default function App() {
                   {goal || "Chưa thiết lập mục tiêu hiện tại."}
                 </p>
                 <div className="flex gap-1.5 pt-1">
-                  <button onClick={handleEditGoal} className="text-[9px] text-blue-600 hover:text-blue-500 font-bold cursor-pointer">
+                  <button onClick={handleEditGoal} className="text-[9px] text-blue-600 hover:text-blue-500 font-bold cursor-pointer border-none bg-transparent">
                     Sửa
                   </button>
                   {goal && (
-                    <button onClick={handleClearGoal} className="text-[9px] text-red-600 hover:text-red-500 font-bold cursor-pointer">
+                    <button onClick={handleClearGoal} className="text-[9px] text-red-600 hover:text-red-500 font-bold cursor-pointer border-none bg-transparent">
                       Xóa
                     </button>
                   )}
                 </div>
               </div>
             </div>
+
+            {/* SHADOW CHANGES (SHADOW DIFF SUMMARY) SECTION */}
+            <div className="space-y-1.5 pt-1">
+              <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Shadow Changes</span>
+              <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
+                {shadowChanges.length === 0 ? (
+                  <p className="text-[10px] text-zinc-400 italic font-medium">Không có thay đổi nào.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {shadowChanges.map((change) => (
+                      <button
+                        key={change.file}
+                        onClick={() => setSelectedDiff(change)}
+                        className="w-full text-left flex flex-col p-1.5 hover:bg-zinc-50 rounded-md transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent"
+                      >
+                        <span className="text-zinc-750 font-bold truncate block" title={change.file}>
+                          {change.file.split('/').pop()}
+                        </span>
+                        <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
+                          {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
+                          {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
+                          {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
-          <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30">
+          <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-full bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold text-xs border border-blue-500/10">
                 XL
@@ -277,7 +325,7 @@ export default function App() {
                 <p className="text-[10px] text-zinc-400 font-medium mt-1">Administrator</p>
               </div>
             </div>
-            <button title="Download logs" className="text-zinc-400 hover:text-zinc-700 cursor-pointer p-1">
+            <button title="Download logs" className="text-zinc-400 hover:text-zinc-700 cursor-pointer p-1 border-none bg-transparent">
               📥
             </button>
           </div>
@@ -307,14 +355,14 @@ export default function App() {
                           : activeTab === "memory"
                             ? "FluxMem Layer"
                             : activeTab === "sandbox"
-                              ? "Git Sandbox Controller"
+                              ? "Shadow Transaction Manager"
                               : "Telegram Config"}
                     </h2>
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>
                   <button
                     onClick={() => setActiveTab("terminal")}
-                    className="text-xs text-blue-600 hover:underline cursor-pointer"
+                    className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
                   >
                     ← Trở lại khung Chat
                   </button>
@@ -330,6 +378,62 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) */}
+      {selectedDiff && (
+        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-fade-in">
+            {/* Header */}
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
+              <div className="text-left max-w-[80%]">
+                <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>📊</span> So sánh chi tiết tệp Sandbox (vs Shadow File)
+                </h3>
+                <p className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate" title={selectedDiff.absolute_path}>
+                  {selectedDiff.absolute_path}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDiff(null)}
+                className="px-3.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
+              >
+                Đóng [Esc]
+              </button>
+            </div>
+
+            {/* Diff View Area */}
+            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left">
+              {selectedDiff.diff ? (
+                <div className="divide-y divide-zinc-850/10">
+                  {selectedDiff.diff.split('\n').map((line, idx) => {
+                    let colorClass = "text-zinc-300";
+                    let bgClass = "";
+
+                    if (line.startsWith('+') && !line.startsWith('+++')) {
+                      colorClass = "text-emerald-400";
+                      bgClass = "bg-emerald-950/30 border-l-2 border-emerald-500 pl-3";
+                    } else if (line.startsWith('-') && !line.startsWith('---')) {
+                      colorClass = "text-rose-400";
+                      bgClass = "bg-rose-950/30 border-l-2 border-rose-500 pl-3";
+                    } else {
+                      bgClass = "pl-3 opacity-80";
+                    }
+
+                    return (
+                      <div key={idx} className={`whitespace-pre py-0.5 ${bgClass} ${colorClass}`}>
+                        {line}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-zinc-400 italic text-center py-20">Không phát hiện thay đổi nào trên tệp tin này.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

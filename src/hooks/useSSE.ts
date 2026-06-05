@@ -1,3 +1,4 @@
+// filepath: bridge_client/src/hooks/useSSE.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ExecutionStep {
@@ -274,7 +275,6 @@ export function useSSE(onGenerationComplete?: () => void) {
                 const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
                 cleanTitle = `📂 List Directory: ${displayTarget}`;
               } else if (tool === 'write_file' || tool.includes('write') || tool.includes('replace') || tool.includes('edit')) {
-                // Ưu tiên check các công cụ sửa đổi tệp nguồn trước để tránh trùng lặp với check 'file' bên dưới
                 stepType = 'generic';
                 const target = parsed.input || parsed.file_path || 'file';
                 const displayTarget = typeof target === 'string' && target.length > 60 ? '...' + target.slice(-57) : target;
@@ -396,7 +396,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                           updatedTimeline[lastTimelineStepsIdx] = {
                             ...item,
                             steps: newSteps
-                          };
+                        };
                         }
                       }
                     }
@@ -420,6 +420,40 @@ export function useSSE(onGenerationComplete?: () => void) {
                 details: parsed.details
               });
             } else if (parsed.type === 'done') {
+              // ĐỒNG BỘ HÓA LỊCH SỬ TIN NHẮN TỪ SERVER KHI HOÀN TẤT
+              if (parsed.history) {
+                const loadedMessages: ChatMessage[] = parsed.history.map((m: any) => ({
+                  role: m.role,
+                  content: m.content,
+                  image: m.image || undefined,
+                  steps: m.steps || [],
+                  timeline: m.timeline || undefined
+                }));
+
+                // Nếu lịch sử bị xóa trống (chạy lệnh /new hoặc /clear) và có phản hồi đi kèm
+                if (loadedMessages.length === 0 && parsed.response) {
+                  loadedMessages.push({
+                    role: 'assistant',
+                    content: parsed.response,
+                    timeline: [{
+                      id: 'info-' + Math.random().toString(36).substring(2, 9),
+                      type: 'text',
+                      content: parsed.response
+                    }]
+                  });
+
+                  // Thêm một dòng nhật ký log thông báo cho người dùng trên màn hình phân tích
+                  setLogs((prev) => [
+                    ...prev,
+                    {
+                      timestamp: new Date().toLocaleTimeString(),
+                      text: `🧹 ${parsed.response}`,
+                      type: 'default'
+                    }
+                  ]);
+                }
+                setMessages(loadedMessages);
+              }
               if (onGenerationComplete) onGenerationComplete();
             }
           } catch (e) {
