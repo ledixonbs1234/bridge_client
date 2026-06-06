@@ -171,7 +171,7 @@ export default function App() {
   const handleViewDiffByPath = (filePath: string) => {
     if (!filePath) return;
     const cleanInputPath = filePath.replace(/\\/g, '/').toLowerCase();
-    
+
     // 1. Dò tìm chính xác bằng absolute_path tuyệt đối trong bộ nhớ đệm Sandbox
     const foundInShadow = shadowChanges.find(c => {
       const cleanAbs = c.absolute_path.replace(/\\/g, '/').toLowerCase();
@@ -517,54 +517,89 @@ export default function App() {
               </div>
             </div>
 
-            {/* Diff View Area - KHÔNG DÙNG DIVIDE-Y để loại bỏ hoàn toàn lưới chia dòng gây nhiễu */}
-            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left">
+            {/* Diff View Area - CHỈ HIỂN THỊ DÒNG THAY ĐỔI + CONTEXT GIỚI HẠN */}
+            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-sm leading-relaxed text-left">
               {(() => {
-                // Lọc dữ liệu hiển thị dựa trên chế độ xem đã chọn
                 const targetDiff = diffMode === 'latest'
                   ? (selectedDiff.latest_diff || selectedDiff.diff)
                   : selectedDiff.diff;
 
-                if (targetDiff) {
-                  return (
-                    <div className="font-mono text-xs space-y-0.5">
-                      {targetDiff.split('\n').map((line, idx) => {
-                        let colorClass = "text-zinc-500 opacity-60"; // Các dòng không đổi sẽ được làm mờ nhẹ
-                        let bgClass = "pl-3";
-                        const isAdd = line.startsWith('+') && !line.startsWith('+++');
-                        const isDel = line.startsWith('-') && !line.startsWith('---');
-
-                        if (isAdd) {
-                          colorClass = "text-emerald-400 font-semibold diff-line-add";
-                          bgClass = "bg-emerald-950/45 border-l-2 border-emerald-500 pl-3";
-                        } else if (isDel) {
-                          colorClass = "text-rose-400 font-semibold diff-line-del";
-                          bgClass = "bg-rose-950/45 border-l-2 border-rose-500 pl-3";
-                        } else {
-                          bgClass = "pl-3 opacity-80";
-                        }
-
-                        // Tách ký tự đầu dòng trước khi làm sáng cú pháp
-                        const codeContent = (isAdd || isDel) ? line.substring(1) : line;
-                        const highlightedHtml = highlightCodeLine(codeContent);
-
-                        return (
-                          <div key={idx} className={`whitespace-pre py-0.5 leading-normal ${bgClass} ${colorClass}`}>
-                            {isAdd && <span className="text-emerald-500 font-bold mr-1 select-none">+ </span>}
-                            {isDel && <span className="text-rose-500 font-bold mr-1 select-none">- </span>}
-                            <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                } else {
+                if (!targetDiff) {
                   return (
                     <div className="text-zinc-400 italic text-center py-20">
                       Không phát hiện thay đổi nào thuộc chế độ xem này.
                     </div>
                   );
                 }
+
+                // Parse tất cả các dòng và đánh dấu index của dòng thay đổi
+                const allLines = targetDiff.split('\n');
+                const changeIndices: number[] = [];
+
+                allLines.forEach((line, idx) => {
+                  const isAdd = line.startsWith('+') && !line.startsWith('+++');
+                  const isDel = line.startsWith('-') && !line.startsWith('---');
+                  if (isAdd || isDel) {
+                    changeIndices.push(idx);
+                  }
+                });
+
+                // Tạo tập hợp các index cần hiển thị (change + 3 dòng context trước/sau)
+                const visibleIndices = new Set<number>();
+                const CONTEXT_SIZE = 3;
+
+                changeIndices.forEach(changeIdx => {
+                  for (let i = Math.max(0, changeIdx - CONTEXT_SIZE); i <= Math.min(allLines.length - 1, changeIdx + CONTEXT_SIZE); i++) {
+                    visibleIndices.add(i);
+                  }
+                });
+
+                // Render có gộp nhóm và thêm dấu "..." khi bỏ qua đoạn dài
+                const renderLines: JSX.Element[] = [];
+                let prevVisibleIdx = -10; // Khởi tạo giá trị âm đủ lớn
+
+                Array.from(visibleIndices).sort((a, b) => a - b).forEach((idx) => {
+                  // Nếu khoảng cách giữa 2 dòng hiển thị > 1, chèn dấu "..."
+                  if (idx - prevVisibleIdx > 1) {
+                    renderLines.push(
+                      <div key={`ellipsis-${idx}`} className="py-1 px-3 text-zinc-500 text-xs select-none">
+                        ... ({idx - prevVisibleIdx - 1} dòng không thay đổi đã được ẩn)
+                      </div>
+                    );
+                  }
+
+                  const line = allLines[idx];
+                  const isAdd = line.startsWith('+') && !line.startsWith('+++');
+                  const isDel = line.startsWith('-') && !line.startsWith('---');
+
+                  let colorClass = "text-zinc-500 opacity-60";
+                  let bgClass = "pl-3";
+
+                  if (isAdd) {
+                    colorClass = "text-emerald-400 font-semibold diff-line-add";
+                    bgClass = "bg-emerald-950/45 border-l-2 border-emerald-500 pl-3";
+                  } else if (isDel) {
+                    colorClass = "text-rose-400 font-semibold diff-line-del";
+                    bgClass = "bg-rose-950/45 border-l-2 border-rose-500 pl-3";
+                  } else {
+                    bgClass = "pl-3 opacity-80";
+                  }
+
+                  const codeContent = (isAdd || isDel) ? line.substring(1) : line;
+                  const highlightedHtml = highlightCodeLine(codeContent);
+
+                  renderLines.push(
+                    <div key={idx} className={`whitespace-pre py-0.5 leading-normal ${bgClass} ${colorClass}`}>
+                      {isAdd && <span className="text-emerald-500 font-bold mr-1 select-none">+ </span>}
+                      {isDel && <span className="text-rose-500 font-bold mr-1 select-none">- </span>}
+                      <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+                    </div>
+                  );
+
+                  prevVisibleIdx = idx;
+                });
+
+                return <div className="font-mono space-y-0.5">{renderLines}</div>;
               })()}
             </div>
           </div>

@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/hooks/useSSE.ts
+// filepath: ridge_client/src/hooks/useSSE.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ExecutionStep {
@@ -7,7 +7,7 @@ export interface ExecutionStep {
   title: string;
   input?: string;
   output?: string;
-  toolName?: string; // Bổ sung để xác định chính xác công cụ được gọi
+  toolName?: string;
 }
 
 export interface TimelineItem {
@@ -20,7 +20,8 @@ export interface TimelineItem {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
-  image?: string;
+  image?: string; // Tương thích ngược với ảnh đơn
+  images?: string[]; // NÂNG CẤP: Hỗ trợ nhiều ảnh đồng thời
   steps?: ExecutionStep[];
   timeline?: TimelineItem[];
 }
@@ -54,6 +55,7 @@ export function useSSE(onGenerationComplete?: () => void) {
             role: m.role,
             content: m.content,
             image: m.image || undefined,
+            images: m.images || undefined, // Khôi phục danh sách ảnh cũ
             steps: m.steps || [],
             timeline: m.timeline || undefined
           }));
@@ -81,7 +83,7 @@ export function useSSE(onGenerationComplete?: () => void) {
   const sendPrompt = useCallback(async (
     prompt: string,
     useReformulate: boolean,
-    image?: string | null,
+    images?: string[] | null, // NÂNG CẤP: Nhận mảng string base64 thay vì ảnh đơn
     agent?: string,
     model?: string,
     headless?: boolean
@@ -90,7 +92,7 @@ export function useSSE(onGenerationComplete?: () => void) {
     setPendingPermission(null);
     abortControllerRef.current = new AbortController();
 
-    setMessages((prev) => [...prev, { role: 'user', content: prompt, image: image || undefined }]);
+    setMessages((prev) => [...prev, { role: 'user', content: prompt, images: images || undefined }]);
 
     let currentSteps: ExecutionStep[] = [];
 
@@ -102,7 +104,7 @@ export function useSSE(onGenerationComplete?: () => void) {
           message: prompt,
           stream: true,
           useReformulate,
-          image,
+          images, // Gửi mảng ảnh lên máy chủ
           agent,
           model,
           headless
@@ -396,7 +398,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                           updatedTimeline[lastTimelineStepsIdx] = {
                             ...item,
                             steps: newSteps
-                        };
+                          };
                         }
                       }
                     }
@@ -420,17 +422,16 @@ export function useSSE(onGenerationComplete?: () => void) {
                 details: parsed.details
               });
             } else if (parsed.type === 'done') {
-              // ĐỒNG BỘ HÓA LỊCH SỬ TIN NHẮN TỪ SERVER KHI HOÀN TẤT
               if (parsed.history) {
                 const loadedMessages: ChatMessage[] = parsed.history.map((m: any) => ({
                   role: m.role,
                   content: m.content,
                   image: m.image || undefined,
+                  images: m.images || undefined,
                   steps: m.steps || [],
                   timeline: m.timeline || undefined
                 }));
 
-                // Nếu lịch sử bị xóa trống (chạy lệnh /new hoặc /clear) và có phản hồi đi kèm
                 if (loadedMessages.length === 0 && parsed.response) {
                   loadedMessages.push({
                     role: 'assistant',
@@ -442,7 +443,6 @@ export function useSSE(onGenerationComplete?: () => void) {
                     }]
                   });
 
-                  // Thêm một dòng nhật ký log thông báo cho người dùng trên màn hình phân tích
                   setLogs((prev) => [
                     ...prev,
                     {
