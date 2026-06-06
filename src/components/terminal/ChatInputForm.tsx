@@ -171,7 +171,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
             style={{
                 transform: 'translateZ(0)',
                 willChange: 'transform',
-                contain: 'content',
+                // Đã loại bỏ thuộc tính contain: 'content' gây lấp hộp gợi ý
             }}
         >
             <AnimatePresence>
@@ -228,7 +228,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
 
             <div
                 className="bg-zinc-50 border border-zinc-200 rounded-xl p-2 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-[border-color,box-shadow] duration-200 shadow-sm relative"
-                style={{ contain: 'content' }}
+            // Đã loại bỏ thuộc tính contain: 'content' để dropdown chọn Model hiển thị đúng
             >
                 <textarea
                     value={input}
