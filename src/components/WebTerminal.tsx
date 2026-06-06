@@ -1,5 +1,6 @@
 // filepath: bridge_client/src/components/WebTerminal.tsx
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSSE, ChatMessage, ExecutionStep, TimelineItem } from '@/hooks/useSSE';
 import { Button } from './animate-ui/button';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,44 +14,88 @@ interface FileContentViewerProps {
   totalLines?: number | null;
 }
 
-const FileContentViewer = React.memo(function FileContentViewer({ content, filePath, totalLines }: FileContentViewerProps) {
+// Loại bỏ React.memo để tránh lỗi đóng băng state khi parent re-render
+function FileContentViewer({ content, filePath, totalLines }: FileContentViewerProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
 
   const handleCopy = () => {
+    if (!content) return;
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const fileName = filePath.split('/').pop() || filePath;
+  const hasContent = !!content && content.trim().length > 0;
+
+  useEffect(() => {
+    console.log('[DEBUG-FCV] isModalOpen =', isModalOpen, '| content.length =', content?.length || 0);
+  }, [isModalOpen, content]);
+
+  const handleTriggerClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    console.log('[DEBUG-FCV] Click #' + newCount + ' | filePath:', filePath);
+    console.log('[DEBUG-FCV] event.target:', e.target);
+    try {
+      setIsModalOpen(true);
+      console.log('[DEBUG-FCV] setIsModalOpen(true) OK');
+    } catch (err: any) {
+      console.error('[DEBUG-FCV] ERROR:', err?.message || err);
+      alert('[DEBUG ERROR] ' + (err?.message || String(err)));
+    }
+  };
 
   return (
     <>
       {/* Compact Trigger Card */}
       <button
         type="button"
-        onClick={() => setIsModalOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 bg-white border border-zinc-200 hover:border-blue-400 hover:bg-blue-50/10 rounded-lg text-xs font-medium text-zinc-700 transition-all cursor-pointer w-full max-w-md shadow-xs group"
+        onClick={handleTriggerClick}
+        onMouseDown={() => console.log('[DEBUG-FCV] onMouseDown')}
+        onPointerDown={() => console.log('[DEBUG-FCV] onPointerDown')}
+        className="group relative flex items-center gap-2 px-3 py-2 bg-white border-2 border-blue-400 hover:border-blue-600 hover:bg-blue-50/30 rounded-lg text-xs font-medium text-zinc-700 transition-all cursor-pointer w-full max-w-md shadow-lg active:scale-[0.98]"
+        style={{ pointerEvents: 'auto', zIndex: 100 }}
       >
-        <span className="text-sm text-blue-600 group-hover:scale-110 transition-transform">📖</span>
-        <div className="flex flex-col items-start overflow-hidden">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">Đang đọc</span>
+        <span className="text-sm text-blue-600 group-hover:scale-110 transition-transform"></span>
+        <div className="flex flex-col items-start overflow-hidden flex-1">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">Nhấn để xem chi tiết</span>
           <span className="text-[11px] font-mono font-semibold truncate text-zinc-800" title={filePath}>
             {fileName}
           </span>
         </div>
         {totalLines && (
-          <span className="ml-auto text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-mono">
+          <span className="ml-auto text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-mono group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
             {totalLines}L
           </span>
         )}
       </button>
 
-      {/* Detail Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text animate-fade-in">
-          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+      {/* Debug Panel */}
+      <div className="mt-1 px-2 py-1 bg-yellow-50 border border-yellow-300 rounded text-[9px] font-mono text-yellow-800 space-y-0.5">
+        <div>isModalOpen: <b>{String(isModalOpen)}</b> | clicks: <b>{clickCount}</b></div>
+        <div>hasContent: <b>{String(hasContent)}</b> (len: {content?.length || 0})</div>
+        <div>filePath: <b>{filePath?.substring(0, 50) || 'EMPTY'}</b></div>
+      </div>
+
+      {/* Portal Modal */}
+      {typeof document !== 'undefined' && createPortal(
+        isModalOpen ? (
+          <div
+            className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center p-4 select-text"
+            style={{ zIndex: 999999 }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsModalOpen(false);
+            }}
+          >
+          <div 
+            className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
+            style={{ animation: 'zoomIn 0.2s ease-out' }}
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
               <div className="text-left max-w-[70%]">
@@ -65,7 +110,12 @@ const FileContentViewer = React.memo(function FileContentViewer({ content, fileP
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="px-3 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
+                  disabled={!hasContent}
+                  className={`px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors ${
+                    hasContent 
+                      ? 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 cursor-pointer' 
+                      : 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed'
+                  }`}
                 >
                   {copied ? 'Đã sao chép ✓' : 'Sao chép'}
                 </button>
@@ -79,18 +129,25 @@ const FileContentViewer = React.memo(function FileContentViewer({ content, fileP
             </div>
 
             {/* Code Content */}
-            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left">
-              <pre className="whitespace-pre-wrap break-words">
-                {content}
-              </pre>
+            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left relative">
+              {hasContent ? (
+                <pre className="whitespace-pre-wrap break-words">{content}</pre>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 space-y-2">
+                  <span className="text-4xl opacity-50">📂</span>
+                  <p className="text-sm font-medium">Không tìm thấy nội dung file.</p>
+                  <p className="text-[10px] opacity-70">File có thể đang trống hoặc lỗi khi đọc từ server.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
+        ) : null,
+        document.body
       )}
     </>
   );
-});
-FileContentViewer.displayName = "FileContentViewer";
+}
 import { highlightCodeLine } from '../lib/utils'; // Thêm import này
 
 // =================================================================
