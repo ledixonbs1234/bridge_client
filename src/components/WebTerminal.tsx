@@ -635,7 +635,7 @@ const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
         return (
           <div
             key={partIdx}
-            className="markdown-body-light text-left leading-relaxed text-[13px] select-text"
+            className="markdown-body-light text-left leading-relaxed text-[15px] select-text"
             dangerouslySetInnerHTML={{ __html: part.html || '' }}
           />
         );
@@ -1288,7 +1288,7 @@ const ChatInputForm = React.memo(function ChatInputForm({
           autoCapitalize="off"
           placeholder="Nhập tin nhắn... (dùng / để xem phím tắt)"
           rows={1}
-          className="w-full bg-transparent border-none outline-none resize-none text-[12px] text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-0.5 min-h-[24px] max-h-32"
+          className="w-full bg-transparent border-none outline-none resize-none text-[15px] text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-0.5 min-h-[24px] max-h-32"
         />
 
         <div className="flex justify-between items-center border-t border-zinc-200/60 pt-2 mt-1 flex-wrap gap-1.5">
@@ -1636,7 +1636,7 @@ ${block}
                 return (
                   <div
                     key={idx}
-                    className={`flex flex-col space-y-2 max-w-[85%] text-sm ${msg.role === 'user' ? 'ml-auto' : 'mr-auto w-full'}`}
+                    className={`flex flex-col space-y-2 max-w-[85%] text-base ${msg.role === 'user' ? 'ml-auto' : 'mr-auto w-full'}`}
                   >
                     {msg.image && (
                       <div className="mb-1 self-end">
