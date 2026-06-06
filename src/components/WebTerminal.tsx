@@ -14,6 +14,7 @@ interface FileContentViewerProps {
 }
 
 const FileContentViewer = React.memo(function FileContentViewer({ content, filePath, totalLines }: FileContentViewerProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -22,37 +23,71 @@ const FileContentViewer = React.memo(function FileContentViewer({ content, fileP
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
-    <div className="border border-zinc-200 rounded-xl bg-white overflow-hidden shadow-xs my-1">
-      {/* Header Bar */}
-      <div className="bg-zinc-50 border-b border-zinc-200 px-3 py-1.5 flex items-center justify-between select-none">
-        <div className="flex items-center gap-1.5 overflow-hidden mr-2">
-          <span className="text-xs shrink-0">📄</span>
-          <span className="text-[10px] font-bold text-zinc-700 font-mono truncate" title={filePath}>
-            {filePath || 'untitled-file'}
-          </span>
-          {totalLines && (
-            <span className="text-[8px] bg-blue-50 text-blue-600 border border-blue-100 px-1 py-0.2 rounded font-mono font-bold shrink-0">
-              {totalLines} dòng
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="px-1.5 py-0.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-655 hover:text-zinc-800 rounded text-[9px] font-semibold cursor-pointer transition-colors shadow-xs shrink-0"
-        >
-          {copied ? 'Đã sao chép ✓' : 'Sao chép'}
-        </button>
-      </div>
+  const fileName = filePath.split('/').pop() || filePath;
 
-      {/* Code Text Area */}
-      <div className="p-3 bg-zinc-50/10 overflow-x-auto overflow-y-auto max-h-80 border-t border-zinc-100/30">
-        <pre className="text-[11px] text-zinc-755 whitespace-pre font-mono leading-relaxed text-left">
-          {content}
-        </pre>
-      </div>
-    </div>
+  return (
+    <>
+      {/* Compact Trigger Card */}
+      <button
+        type="button"
+        onClick={() => setIsModalOpen(true)}
+        className="flex items-center gap-2 px-3 py-2 bg-white border border-zinc-200 hover:border-blue-400 hover:bg-blue-50/10 rounded-lg text-xs font-medium text-zinc-700 transition-all cursor-pointer w-full max-w-md shadow-xs group"
+      >
+        <span className="text-sm text-blue-600 group-hover:scale-110 transition-transform">📖</span>
+        <div className="flex flex-col items-start overflow-hidden">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">Đang đọc</span>
+          <span className="text-[11px] font-mono font-semibold truncate text-zinc-800" title={filePath}>
+            {fileName}
+          </span>
+        </div>
+        {totalLines && (
+          <span className="ml-auto text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-mono">
+            {totalLines}L
+          </span>
+        )}
+      </button>
+
+      {/* Detail Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text animate-fade-in">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
+              <div className="text-left max-w-[70%]">
+                <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>📄</span> Nội dung tập tin
+                </h3>
+                <p className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate" title={filePath}>
+                  {filePath}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="px-3 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
+                >
+                  {copied ? 'Đã sao chép ✓' : 'Sao chép'}
+                </button>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-3.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
+                >
+                  Đóng [Esc]
+                </button>
+              </div>
+            </div>
+
+            {/* Code Content */}
+            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left">
+              <pre className="whitespace-pre-wrap break-words">
+                {content}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 });
 FileContentViewer.displayName = "FileContentViewer";
@@ -655,11 +690,13 @@ IncrementalDiffsViewer.displayName = "IncrementalDiffsViewer";
 interface CollapsibleStepsProps {
   steps: ExecutionStep[];
   forceExpand?: boolean;
+  onViewDiff?: (filePath: string) => void;
 }
 
-const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpand = false }: CollapsibleStepsProps) {
+const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpand = false, onViewDiff }: CollapsibleStepsProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
+  const [selectedFileContent, setSelectedFileContent] = useState<{ content: string; filePath: string; totalLines?: number | null } | null>(null);
 
   useEffect(() => {
     if (forceExpand) {
@@ -1077,9 +1114,14 @@ const ChatInputForm = React.memo(function ChatInputForm({
         setSuggestIndex((prev) => (prev - 1 + filteredSuggests.length) % filteredSuggests.length);
         return;
       }
-      if (e.key === 'Enter') {
+      if (e.key === 'Tab') {
         e.preventDefault();
         handleCommandSelect(filteredSuggests[suggestIndex].cmd);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmit(e);
         return;
       }
       if (e.key === 'Escape') {
@@ -1558,6 +1600,7 @@ ${block}
                                 key={item.id}
                                 steps={item.steps}
                                 forceExpand={isCurrentlyGeneratingThis}
+                                onViewDiff={onViewDiff}
                               />
                             );
                           } else if (item.type === 'text' && item.content && item.content.trim()) {
