@@ -126,8 +126,8 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
 
       setScale(prev => {
         const next = prev + direction * zoomSpeed;
-        // SỬA: Thay đổi giới hạn zoom tối đa thành 8.0 (800%) và tối thiểu là 0.1 (10%)
-        return Math.min(8, Math.max(0.1, next));
+        // SỬA: Thay đổi giới hạn zoom tối đa thành 17.0 (1700%) và tối thiểu là 0.1 (10%)
+        return Math.min(17, Math.max(0.1, next));
       });
     };
 

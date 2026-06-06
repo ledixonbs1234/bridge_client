@@ -56,13 +56,17 @@ const FileContentViewer = React.memo(function FileContentViewer({ content, fileP
   );
 });
 FileContentViewer.displayName = "FileContentViewer";
+import { highlightCodeLine } from '../lib/utils'; // Thêm import này
 
 // =================================================================
-// 🎨 Component: Git Sandbox Diff Viewer
+// 🎨 Component: Git Sandbox Diff Viewer sử dụng highlight.js
 // =================================================================
 interface DiffViewerProps {
   filePath: string;
 }
+
+const cleanPath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+const pathBasename = (p: string) => p.split('/').pop() || '';
 
 const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps) {
   const [diffText, setDiffText] = useState<string | null>(null);
@@ -78,9 +82,6 @@ const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps)
       })
       .then((data) => {
         if (data.success && Array.isArray(data.changes)) {
-          const cleanPath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
-          const pathBasename = (p: string) => p.split('/').pop() || '';
-
           const matched = data.changes.find((c: any) => {
             const cFile = cleanPath(c.file);
             const fFile = cleanPath(filePath);
@@ -104,6 +105,10 @@ const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps)
   useEffect(() => {
     fetchDiff();
   }, [fetchDiff]);
+
+  const lines = useMemo(() => {
+    return diffText ? diffText.split('\n') : [];
+  }, [diffText]);
 
   if (loading) {
     return (
@@ -129,8 +134,6 @@ const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps)
     );
   }
 
-  const lines = diffText.split('\n');
-
   return (
     <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white shadow-xs my-1 select-text">
       <div className="bg-zinc-50 border-b border-zinc-200 px-3 py-1.5 flex items-center justify-between select-none">
@@ -147,25 +150,42 @@ const DiffViewer = React.memo(function DiffViewer({ filePath }: DiffViewerProps)
       </div>
       <div className="p-2.5 bg-zinc-900 text-zinc-100 overflow-x-auto max-h-80 font-mono text-[11px] leading-relaxed border-t border-zinc-800">
         {lines.map((line, idx) => {
-          let colorClass = "text-zinc-300";
-          let bgClass = "";
+          const isAdd = line.startsWith('+') && !line.startsWith('+++');
+          const isDel = line.startsWith('-') && !line.startsWith('---');
+          const isMeta = line.startsWith('@@');
 
-          if (line.startsWith('+') && !line.startsWith('+++')) {
-            colorClass = "text-emerald-400";
+          let bgClass = "";
+          let prefix = "";
+          let codeContent = line;
+
+          if (isAdd) {
             bgClass = "bg-emerald-950/40 border-l-2 border-emerald-500 pl-1";
-          } else if (line.startsWith('-') && !line.startsWith('---')) {
-            colorClass = "text-rose-400";
+            prefix = "+ ";
+            codeContent = line.substring(1);
+          } else if (isDel) {
             bgClass = "bg-rose-950/40 border-l-2 border-rose-500 pl-1";
-          } else if (line.startsWith('@@')) {
-            colorClass = "text-cyan-400";
+            prefix = "- ";
+            codeContent = line.substring(1);
+          } else if (isMeta) {
             bgClass = "bg-cyan-950/30 border-l-2 border-cyan-500 pl-1";
-          } else if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
-            colorClass = "text-zinc-500 font-bold italic";
           }
 
+          const highlightedHtml = highlightCodeLine(codeContent);
+
           return (
-            <div key={idx} className={`whitespace-pre py-0.5 ${bgClass} ${colorClass}`}>
-              {line}
+            <div key={idx} className={`whitespace-pre py-0.5 ${bgClass}`}>
+              {prefix && (
+                <span className={isAdd ? "text-emerald-500 font-bold mr-1 select-none" : "text-rose-500 font-bold mr-1 select-none"}>
+                  {prefix}
+                </span>
+              )}
+              {isAdd || isDel || (!line.startsWith('diff') && !line.startsWith('index') && !line.startsWith('---') && !line.startsWith('+++') && !line.startsWith('@@')) ? (
+                <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+              ) : (
+                <span className={isMeta ? "text-cyan-400 font-semibold" : "text-zinc-500 italic"}>
+                  {line}
+                </span>
+              )}
             </div>
           );
         })}
@@ -301,7 +321,7 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
                   {q.allow_custom && (
                     <button
                       type="button"
-                      onClick={() => useCustom[q.id] = true}
+                      onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: true }))}
                       className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
                         ? 'bg-blue-600 border-blue-600 text-white'
                         : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
@@ -356,7 +376,7 @@ const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ da
                   {q.allow_custom && (
                     <button
                       type="button"
-                      onClick={() => useCustom[q.id] = !useCustom[q.id]}
+                      onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: !prev[q.id] }))}
                       className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
                         ? 'bg-blue-600 border-blue-600 text-white'
                         : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
@@ -484,7 +504,11 @@ const getMessageTimeline = (msg: ChatMessage, msgIdx: number): TimelineItem[] =>
   }
   return reconstructed;
 };
-
+interface ParsedPart {
+  type: string;
+  content: string;
+  html?: string; // Khai báo thuộc tính html dưới dạng tùy chọn (optional)
+}
 const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
   const cleanContent = useMemo(() => {
     return content
@@ -492,13 +516,23 @@ const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
       .trim();
   }, [content]);
 
-  const parts = useMemo(() => {
-    return parseContentAndMermaid(cleanContent);
+  // 2. Ép kiểu dữ liệu mảng trả về là ParsedPart[] để TypeScript hiểu thuộc tính html
+  const parsedParts = useMemo<ParsedPart[]>(() => {
+    const rawParts = parseContentAndMermaid(cleanContent);
+    return rawParts.map((part) => {
+      if (part.type === 'markdown') {
+        return {
+          ...part,
+          html: marked.parse(part.content) as string
+        };
+      }
+      return part;
+    });
   }, [cleanContent]);
 
   return (
     <div className="space-y-3.5 text-left">
-      {parts.map((part, partIdx) => {
+      {parsedParts.map((part, partIdx) => {
         if (part.type === 'mermaid') {
           return (
             <div key={partIdx} className="my-1.5">
@@ -506,12 +540,11 @@ const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
             </div>
           );
         }
-        const htmlContent = marked.parse(part.content) as string;
         return (
           <div
             key={partIdx}
             className="markdown-body-light text-left leading-relaxed text-[13px] select-text"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
+            dangerouslySetInnerHTML={{ __html: part.html || '' }}
           />
         );
       })}
@@ -519,6 +552,105 @@ const TimelineTextBlock = React.memo(({ content }: { content: string }) => {
   );
 });
 TimelineTextBlock.displayName = "TimelineTextBlock";
+
+interface IncrementalDiff {
+  file: string;
+  additions: number;
+  deletions: number;
+  diff: string;
+}
+
+// Component hiển thị gọn gàng danh sách các thay đổi dòng trung gian
+const IncrementalDiffsViewer = React.memo(({ diffs }: { diffs: IncrementalDiff[] }) => {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (filePath: string) => {
+    setExpanded(prev => ({ ...prev, [filePath]: !prev[filePath] }));
+  };
+
+  return (
+    <div className="space-y-2 select-text w-full">
+      {diffs.map((d, dIdx) => {
+        const isExpanded = !!expanded[d.file];
+        const fileName = d.file.split('/').pop() || '';
+        const lines = d.diff ? d.diff.split('\n') : [];
+
+        return (
+          <div key={dIdx} className="border border-zinc-200 rounded-xl bg-white overflow-hidden shadow-2xs">
+            {/* Thanh điều khiển rút gọn */}
+            <button
+              type="button"
+              onClick={() => toggleExpand(d.file)}
+              className="w-full flex items-center justify-between p-2.5 bg-zinc-50/50 hover:bg-zinc-100/60 text-left transition-colors cursor-pointer select-none border-none"
+            >
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <span className="text-xs">📝</span>
+                <span className="text-[11px] font-bold text-zinc-700 font-mono truncate" title={d.file}>
+                  Thay đổi: {fileName}
+                </span>
+                <span className="text-[9px] font-mono font-bold flex gap-1 bg-white border border-zinc-200 px-1.5 py-0.2 rounded shadow-3xs">
+                  {d.additions > 0 && <span className="text-emerald-600 font-bold">+{d.additions}</span>}
+                  {d.deletions > 0 && <span className="text-rose-600 font-bold">-{d.deletions}</span>}
+                  {d.additions === 0 && d.deletions === 0 && <span className="text-zinc-400">không đổi</span>}
+                </span>
+              </div>
+              <span className="text-[9px] text-zinc-400 font-semibold shrink-0">
+                {isExpanded ? 'Ẩn chi tiết [-]' : 'Xem thay đổi [+]'}
+              </span>
+            </button>
+
+            {/* Khung nội dung mã màu */}
+            {isExpanded && (
+              <div className="border-t border-zinc-200 p-2.5 bg-zinc-900 text-zinc-100 overflow-x-auto max-h-80 font-mono text-[11px] leading-relaxed">
+                {lines.map((line, lIdx) => {
+                  const isAdd = line.startsWith('+') && !line.startsWith('+++');
+                  const isDel = line.startsWith('-') && !line.startsWith('---');
+                  const isMeta = line.startsWith('@@');
+
+                  let bgClass = "pl-2 opacity-85";
+                  let prefix = "";
+                  let codeContent = line;
+
+                  if (isAdd) {
+                    bgClass = "bg-emerald-950/40 border-l-2 border-emerald-500 pl-1";
+                    prefix = "+ ";
+                    codeContent = line.substring(1);
+                  } else if (isDel) {
+                    bgClass = "bg-rose-950/40 border-l-2 border-rose-500 pl-1";
+                    prefix = "- ";
+                    codeContent = line.substring(1);
+                  } else if (isMeta) {
+                    bgClass = "bg-cyan-950/30 border-l-2 border-cyan-500 pl-1";
+                  }
+
+                  const highlightedHtml = highlightCodeLine(codeContent);
+
+                  return (
+                    <div key={lIdx} className={`whitespace-pre py-0.5 ${bgClass}`}>
+                      {prefix && (
+                        <span className={isAdd ? "text-emerald-500 font-bold mr-1 select-none" : "text-rose-500 font-bold mr-1 select-none"}>
+                          {prefix}
+                        </span>
+                      )}
+                      {isAdd || isDel || (!line.startsWith('diff') && !line.startsWith('index') && !line.startsWith('---') && !line.startsWith('+++') && !line.startsWith('@@')) ? (
+                        <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+                      ) : (
+                        <span className={isMeta ? "text-cyan-400 font-semibold" : "text-zinc-500 italic"}>
+                          {line}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+IncrementalDiffsViewer.displayName = "IncrementalDiffsViewer";
 
 interface CollapsibleStepsProps {
   steps: ExecutionStep[];
@@ -594,7 +726,7 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                     {step.type === 'thinking' && (
                       <div className="space-y-1">
                         <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Thinking process</div>
-                        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-650 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-655 whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
                           {step.input}
                         </pre>
                       </div>
@@ -755,35 +887,75 @@ const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, forceExpa
                       </div>
                     )}
 
-                    {step.type === 'generic' && (
-                      <div className="space-y-2.5">
-                        {step.input && (
-                          <div className="space-y-1">
-                            <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">File Path / Input</div>
-                            <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-650 whitespace-pre-wrap">
-                              {step.input}
-                            </pre>
-                          </div>
-                        )}
+                   {step.type === 'generic' && (
+  <div className="space-y-2.5">
+    {step.input && (
+      <div className="space-y-1">
+        <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">File Path / Input</div>
+        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-655 whitespace-pre-wrap">
+          {step.input}
+        </pre>
+      </div>
+    )}
 
-                        {/* HIỂN THỊ DIFF TỰ ĐỘNG CHO WRITE VÀ REPLACE */}
-                        {(step.toolName === 'write_file' || step.toolName === 'replace_by_lines_safe' || step.title.toLowerCase().includes('write_file') || step.title.toLowerCase().includes('replace_by_lines_safe')) && step.input && (
-                          <div className="space-y-1">
-                            <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Git Sandbox Diff</div>
-                            <DiffViewer filePath={step.input} />
-                          </div>
-                        )}
+    {/* ─── CHÈN ĐOẠN NÀY ĐỂ HIỂN THỊ TẤM THẺ THAY ĐỔI CÓ THỂ NHẤP VÀO ĐỂ XEM DIFF ─── */}
+    {(() => {
+      let diffData: Array<{ file: string, additions: number, deletions: number }> = [];
+      try {
+        if (step.output) {
+          const parsed = JSON.parse(step.output);
+          const data = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
+          if (data) {
+            if (Array.isArray(data.incremental_diffs)) {
+              diffData = data.incremental_diffs;
+            } else if (data.incremental_diff) {
+              diffData = [data.incremental_diff];
+            }
+          }
+        }
+      } catch (e) {}
 
-                        {step.output && (
-                          <div className="space-y-1">
-                            <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Result</div>
-                            <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                              {step.output}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
+      if (diffData.length > 0) {
+        return (
+          <div className="mt-2 space-y-1.5 text-left">
+            <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Tệp tin thay đổi trong bước này</div>
+            <div className="flex flex-col gap-1.5">
+              {diffData.map((d, dIdx) => (
+                <button
+                  key={dIdx}
+                  type="button"
+                  onClick={() => onViewDiff && onViewDiff(d.file)}
+                  className="flex items-center justify-between px-3 py-2 bg-zinc-50 border border-zinc-200 hover:border-blue-300 hover:bg-blue-50/20 rounded-lg text-xs font-mono transition-[border-color,background-color] duration-200 cursor-pointer w-full text-left shadow-xs"
+                >
+                  <span className="text-zinc-700 font-bold truncate">📄 {d.file.split('/').pop()}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {d.additions > 0 && <span className="text-emerald-600 font-bold">+{d.additions}</span>}
+                      {' '}
+                      {d.deletions > 0 && <span className="text-rose-600 font-bold">-{d.deletions}</span>}
+                    </span>
+                    <span className="text-[10px] text-blue-600 font-bold hover:underline select-none">Xem chi tiết 🔍</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      return null;
+    })()}
+    {/* ─────────────────────────────────────────────────────────────────────────── */}
+
+    {step.output && (
+      <div className="space-y-1">
+        <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Result</div>
+        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-700 whitespace-pre-wrap leading-relaxed">
+          {step.output}
+        </pre>
+      </div>
+    )}
+  </div>
+)}
                   </div>
                 )}
               </div>
@@ -824,7 +996,7 @@ const ChatInputForm = React.memo(function ChatInputForm({
 }: ChatInputFormProps) {
   const [input, setInput] = useState('');
 
-  // SỬA: Khởi tạo giá trị ban đầu an toàn từ localStorage thay vì mặc định cứng
+  // Khởi tạo giá trị ban đầu an toàn từ localStorage thay vì mặc định cứng
   const [useReformulate, setUseReformulate] = useState(() => {
     try {
       const saved = localStorage.getItem('bridge_use_reformulate');
@@ -847,8 +1019,9 @@ const ChatInputForm = React.memo(function ChatInputForm({
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showCommandSuggest, setShowCommandSuggest] = useState(false);
   const [filteredSuggests, setFilteredSuggests] = useState<CommandInfo[]>([]);
+  const [suggestIndex, setSuggestIndex] = useState(0); // Index cho bàn phím điều hướng gợi ý
 
-  // SỬA: Đồng bộ hóa cập nhật vào localStorage bất cứ khi nào giá trị thay đổi
+  // Đồng bộ hóa cập nhật vào localStorage bất cứ khi nào giá trị thay đổi
   useEffect(() => {
     localStorage.setItem('bridge_use_reformulate', JSON.stringify(useReformulate));
   }, [useReformulate]);
@@ -856,6 +1029,11 @@ const ChatInputForm = React.memo(function ChatInputForm({
   useEffect(() => {
     localStorage.setItem('bridge_use_headless', JSON.stringify(useHeadless));
   }, [useHeadless]);
+
+  // Reset index gợi ý khi tập lệnh tìm kiếm thay đổi
+  useEffect(() => {
+    setSuggestIndex(0);
+  }, [filteredSuggests]);
 
   const handleInputChange = (val: string) => {
     setInput(val);
@@ -887,6 +1065,30 @@ const ChatInputForm = React.memo(function ChatInputForm({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Điều hướng phím mũi tên và phím Enter để chọn lệnh gợi ý nhanh
+    if (showCommandSuggest && filteredSuggests.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSuggestIndex((prev) => (prev + 1) % filteredSuggests.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSuggestIndex((prev) => (prev - 1 + filteredSuggests.length) % filteredSuggests.length);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleCommandSelect(filteredSuggests[suggestIndex].cmd);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowCommandSuggest(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -932,12 +1134,16 @@ const ChatInputForm = React.memo(function ChatInputForm({
             className="absolute bottom-full left-3 right-3 mb-2 bg-white border border-zinc-200 rounded-xl shadow-xl max-h-40 overflow-y-auto z-50 p-1"
           >
             <div className="px-2 py-0.5 text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Slash Commands</div>
-            {filteredSuggests.map((c) => (
+            {filteredSuggests.map((c, idx) => (
               <button
                 key={c.cmd}
                 type="button"
                 onClick={() => handleCommandSelect(c.cmd)}
-                className="w-full text-left px-2 py-1 hover:bg-zinc-50 rounded-md flex items-center justify-between text-[11px] cursor-pointer font-semibold transition-colors text-zinc-700"
+                className={`w-full text-left px-2 py-1 rounded-md flex items-center justify-between text-[11px] cursor-pointer font-semibold transition-colors ${
+                  idx === suggestIndex
+                    ? "bg-blue-50 text-blue-700 font-bold"
+                    : "text-zinc-750 hover:bg-zinc-50"
+                }`}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="text-blue-600 font-mono font-bold">{c.cmd}</span>
@@ -1087,9 +1293,10 @@ interface WebTerminalProps {
   setActiveModel: (model: string) => void;
   sse: ReturnType<typeof useSSE>;
   workspaceData: WorkspaceData | null;
+  onViewDiff?: (filePath: string) => void; // Thêm dòng này vào interface props
 }
 
-export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData }: WebTerminalProps) {
+export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData, onViewDiff }: WebTerminalProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollTopRef = useRef<number>(0);
@@ -1130,7 +1337,8 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
 
     const resizeObserver = new ResizeObserver(() => {
       if (shouldAutoScrollRef.current) {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Tốc độ truyền tải Token cao của SSE hoạt động tốt hơn với cuộn tức thời (instant/auto) thay vì cuộn mượt (smooth)
+        chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
       }
     });
 
@@ -1151,7 +1359,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
             .map(([key, p]: any) => ({
               key,
               name: p.name || key
-            }));
+                }));
           setRealProviders(enabledList);
         }
       })
@@ -1187,7 +1395,10 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
       .catch((err) => console.error("Gặp sự cố khi chuyển nhà cung cấp:", err));
   }, [setActiveModel, setLogs]);
 
+  // Sơ đồ tự động sửa cú pháp Mermaid bị lỗi
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
     if (!isGenerating && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === 'assistant' && lastMsg.content !== lastValidatedMessageRef.current) {
@@ -1229,7 +1440,8 @@ MÃ NGUỒN GỐC GÂY LỖI:
 ${block}
 \`\`\``;
 
-                  setTimeout(() => {
+                  // Lưu timeout ID để có thể dọn dẹp một cách an toàn khi component bị hủy
+                  timeoutId = setTimeout(() => {
                     sendPrompt(systemFeedback, false, null, activeAgent, activeModel, true);
                   }, 1500);
                 }
@@ -1243,11 +1455,17 @@ ${block}
         }
       }
     }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [isGenerating, messages, sendPrompt, setLogs, activeAgent, activeModel]);
 
   useEffect(() => {
     if (shouldAutoScrollRef.current) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
   }, [messages]);
 

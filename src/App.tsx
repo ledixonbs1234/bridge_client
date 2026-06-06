@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/App.tsx
+// filepath: ridge_client/src/App.tsx
 import { useState, useEffect } from "react";
 import { useSSE } from "./hooks/useSSE";
 import { WebTerminal } from "./components/WebTerminal";
@@ -7,6 +7,7 @@ import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
 import { TelegramConfig } from "./components/TelegramConfig";
 import { SandboxManager } from "./components/SandboxManager";
+import { highlightCodeLine } from "./lib/utils";
 
 type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox";
 
@@ -68,27 +69,23 @@ interface ShadowChange {
   additions: number;
   deletions: number;
   diff: string;
+  latest_diff?: string;
+  latest_additions?: number;
+  latest_deletions?: number;
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabPanel>("terminal");
   const [goal, setGoal] = useState<string | null>(null);
 
-  // Giữ nguyên State mặc định để truyền cấu hình an toàn cho WebTerminal
   const [activeAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
   const [activeModel, setActiveModel] = useState<string>("MiniMax-M3");
   const [reloadTrigger, setReloadTrigger] = useState(0);
-
-  // Live real-time workspace state
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null);
-
-  // State quản lý trạng thái kết nối của Bridge Server
   const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
-
-  // State theo dõi các tệp tin thay đổi trong Sandbox thông qua Shadow Files
   const [shadowChanges, setShadowChanges] = useState<ShadowChange[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<ShadowChange | null>(null);
-
+  const [diffMode, setDiffMode] = useState<'cumulative' | 'latest'>('latest');
   const sse = useSSE(() => {
     setReloadTrigger((prev) => prev + 1);
     fetchWorkspace();
@@ -143,7 +140,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Xử lý phím Escape để đóng nhanh cửa sổ Diff Modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -157,6 +153,93 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedDiff]);
+
+  // Tự động tìm kiếm và cuộn khung nhìn đến dòng thay đổi đầu tiên khi mở Modal
+  useEffect(() => {
+    if (selectedDiff) {
+      const timer = setTimeout(() => {
+        const firstChangeEl = document.querySelector('.diff-line-add, .diff-line-del');
+        if (firstChangeEl) {
+          firstChangeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedDiff, diffMode]);
+
+  // Bộ dò tìm và mở hộp thoại Diff từ đường dẫn tệp tin (Đồng bộ tuyệt đối)
+  const handleViewDiffByPath = (filePath: string) => {
+    if (!filePath) return;
+    const cleanInputPath = filePath.replace(/\\/g, '/').toLowerCase();
+    
+    // 1. Dò tìm chính xác bằng absolute_path tuyệt đối trong bộ nhớ đệm Sandbox
+    const foundInShadow = shadowChanges.find(c => {
+      const cleanAbs = c.absolute_path.replace(/\\/g, '/').toLowerCase();
+      return cleanAbs === cleanInputPath || cleanAbs.endsWith(cleanInputPath) || cleanInputPath.endsWith(cleanAbs);
+    });
+
+    if (foundInShadow) {
+      setDiffMode('latest');
+      setSelectedDiff(foundInShadow);
+    } else {
+      // 2. Dự phòng: Dò tìm bằng absolute_path tuyệt đối trong Git changes thực tế
+      fetch("/api/dashboard/code-changes")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.changes)) {
+            const matched = data.changes.find((c: any) => {
+              const cAbs = (c.absolute_path || c.file).replace(/\\/g, '/').toLowerCase();
+              return cAbs === cleanInputPath || cAbs.endsWith(cleanInputPath) || cleanInputPath.endsWith(cAbs);
+            });
+
+            if (matched) {
+              setDiffMode('latest');
+              setSelectedDiff({
+                file: matched.file,
+                absolute_path: matched.absolute_path || matched.file,
+                status: matched.status,
+                additions: matched.additions,
+                deletions: matched.deletions,
+                diff: matched.diff,
+                latest_diff: matched.diff,
+                latest_additions: matched.additions,
+                latest_deletions: matched.deletions
+              });
+            } else {
+              alert(`Không tìm thấy dữ liệu thay đổi cho tệp: ${filePath.split('/').pop()}`);
+            }
+          }
+        })
+        .catch(() => {
+          alert(`Không tìm thấy dữ liệu thay đổi cho tệp: ${filePath.split('/').pop()}`);
+        });
+    }
+  };
+
+  const handleRollback = (file?: string) => {
+    const confirmMsg = file
+      ? `Bạn có chắc chắn muốn khôi phục tệp "${file.split('/').pop()}" về nguyên trạng ban đầu?`
+      : "Bạn có chắc chắn muốn khôi phục TOÀN BỘ các tệp đang thay đổi về nguyên trạng ban đầu?";
+    if (!confirm(confirmMsg)) return;
+
+    fetch("/api/dashboard/shadow-changes/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          alert(data.message);
+          fetchShadowChanges();
+          setSelectedDiff(null);
+          setReloadTrigger((prev) => prev + 1);
+        } else {
+          alert("Lỗi khôi phục: " + data.error);
+        }
+      })
+      .catch((err) => alert("Lỗi kết nối: " + err.message));
+  };
 
   const handleEditGoal = () => {
     const nextGoal = prompt("Nhập mục tiêu (Goal) mới cho Agent:", goal || "");
@@ -189,8 +272,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-zinc-800 flex flex-col font-sans antialiased overflow-hidden h-screen select-none">
-
-      {/* THANH CẢNH BÁO MẤT KẾT NỐI VỚI BACKEND */}
       {!isServerConnected && (
         <div className="bg-red-600 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2 z-[9999] shadow-md shrink-0">
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -199,7 +280,6 @@ export default function App() {
       )}
 
       <div className="flex flex-1 overflow-hidden h-full">
-        {/* PERSISTENT LIGHT SIDEBAR */}
         <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700 overflow-y-auto">
           <div className="p-4 space-y-6">
             <div className="flex items-center gap-2 px-1">
@@ -211,9 +291,7 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => {
-                setActiveTab("terminal");
-              }}
+              onClick={() => setActiveTab("terminal")}
               className="flex items-center justify-center gap-2 w-full border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
             >
               <span className="text-sm font-bold">+</span> New task
@@ -222,49 +300,42 @@ export default function App() {
             <nav className="space-y-1">
               <button
                 onClick={() => setActiveTab("traces")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">🔍</span> Search
               </button>
               <button
                 onClick={() => setActiveTab("telemetry")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telemetry" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telemetry" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">📊</span> Skills
               </button>
               <button
                 onClick={() => setActiveTab("terminal")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">📅</span> Scheduled
               </button>
               <button
                 onClick={() => setActiveTab("memory")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "memory" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "memory" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">🧠</span> Assets
               </button>
               <button
                 onClick={() => setActiveTab("sandbox")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "sandbox" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "sandbox" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">🛡️</span> Shadow Files
               </button>
               <button
                 onClick={() => setActiveTab("telegram")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telegram" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"
-                  }`}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telegram" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
                 <span className="text-sm">✈️</span> Connect Mobile
               </button>
             </nav>
 
-            {/* CURRENT GOAL SECTION */}
             <div className="space-y-1.5">
               <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Current Goal</span>
               <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
@@ -284,35 +355,52 @@ export default function App() {
               </div>
             </div>
 
-            {/* SHADOW CHANGES (SHADOW DIFF SUMMARY) SECTION */}
             <div className="space-y-1.5 pt-1">
-              <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Shadow Changes</span>
+              <div className="flex justify-between items-center px-3">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Shadow Changes</span>
+                {shadowChanges.length > 0 && (
+                  <button
+                    onClick={() => handleRollback()}
+                    className="text-[9px] text-red-600 hover:underline font-bold bg-transparent border-none cursor-pointer"
+                    title="Khôi phục tất cả các tệp về nguyên trạng"
+                  >
+                    ↩️ Reset All
+                  </button>
+                )}
+              </div>
               <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
                 {shadowChanges.length === 0 ? (
                   <p className="text-[10px] text-zinc-400 italic font-medium">Không có thay đổi nào.</p>
                 ) : (
                   <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                     {shadowChanges.map((change) => (
-                      <button
-                        key={change.file}
-                        onClick={() => setSelectedDiff(change)}
-                        className="w-full text-left flex flex-col p-1.5 hover:bg-zinc-50 rounded-md transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent"
-                      >
-                        <span className="text-zinc-750 font-bold truncate block" title={change.file}>
-                          {change.file.split('/').pop()}
-                        </span>
-                        <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
-                          {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
-                          {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
-                          {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
-                        </span>
-                      </button>
+                      <div key={change.file} className="flex items-center justify-between group hover:bg-zinc-50 rounded-md pr-1">
+                        <button
+                          onClick={() => setSelectedDiff(change)}
+                          className="flex-1 text-left flex flex-col p-1.5 transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent truncate"
+                        >
+                          <span className="text-zinc-750 font-bold truncate block" title={change.file}>
+                            {change.file.split('/').pop()}
+                          </span>
+                          <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
+                            {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
+                            {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
+                            {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleRollback(change.file)}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-500 rounded text-xs border-none bg-transparent cursor-pointer transition-opacity"
+                          title={`Khôi phục tệp ${change.file.split('/').pop()} về nguyên trạng`}
+                        >
+                          ↩️
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
             </div>
-
           </div>
 
           <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30 shrink-0">
@@ -331,7 +419,6 @@ export default function App() {
           </div>
         </aside>
 
-        {/* MAIN CONTAINER WORKSPACE */}
         <main className="flex-1 flex flex-col bg-white overflow-hidden h-full relative">
           {activeTab === "terminal" ? (
             <WebTerminal
@@ -340,6 +427,7 @@ export default function App() {
               setActiveModel={setActiveModel}
               sse={sse}
               workspaceData={workspaceData}
+              onViewDiff={handleViewDiffByPath} // Liên kết Callback
             />
           ) : (
             <div className="flex-1 bg-white text-zinc-800 p-8 overflow-y-auto select-text border-l border-zinc-200">
@@ -379,61 +467,109 @@ export default function App() {
         </main>
       </div>
 
-      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) */}
+      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) WITH MULTI-COLOR HIGHLIGHTING */}
       {selectedDiff && (
         <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text">
-          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-fade-in">
+          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-fade-in text-zinc-800">
+
             {/* Header */}
             <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
-              <div className="text-left max-w-[80%]">
+              <div className="text-left max-w-[50%]">
                 <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>📊</span> So sánh chi tiết tệp Sandbox (vs Shadow File)
+                  <span>📊</span> So sánh chi tiết tệp Sandbox
                 </h3>
                 <p className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate" title={selectedDiff.absolute_path}>
                   {selectedDiff.absolute_path}
                 </p>
               </div>
-              <button
-                onClick={() => setSelectedDiff(null)}
-                className="px-3.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
-              >
-                Đóng [Esc]
-              </button>
+
+              {/* Nút bấm chuyển đổi chế độ xem */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center bg-zinc-100 rounded-lg border border-zinc-200 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setDiffMode('latest')}
+                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${diffMode === 'latest'
+                      ? 'bg-white text-zinc-800 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-600'
+                      }`}
+                  >
+                    Lần sửa gần nhất
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiffMode('cumulative')}
+                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${diffMode === 'cumulative'
+                      ? 'bg-white text-zinc-800 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-600'
+                      }`}
+                  >
+                    Lũy kế phiên
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setSelectedDiff(null)}
+                  className="px-3.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
+                >
+                  Đóng [Esc]
+                </button>
+              </div>
             </div>
 
-            {/* Diff View Area */}
+            {/* Diff View Area - KHÔNG DÙNG DIVIDE-Y để loại bỏ hoàn toàn lưới chia dòng gây nhiễu */}
             <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left">
-              {selectedDiff.diff ? (
-                <div className="divide-y divide-zinc-850/10">
-                  {selectedDiff.diff.split('\n').map((line, idx) => {
-                    let colorClass = "text-zinc-300";
-                    let bgClass = "";
+              {(() => {
+                // Lọc dữ liệu hiển thị dựa trên chế độ xem đã chọn
+                const targetDiff = diffMode === 'latest'
+                  ? (selectedDiff.latest_diff || selectedDiff.diff)
+                  : selectedDiff.diff;
 
-                    if (line.startsWith('+') && !line.startsWith('+++')) {
-                      colorClass = "text-emerald-400";
-                      bgClass = "bg-emerald-950/30 border-l-2 border-emerald-500 pl-3";
-                    } else if (line.startsWith('-') && !line.startsWith('---')) {
-                      colorClass = "text-rose-400";
-                      bgClass = "bg-rose-950/30 border-l-2 border-rose-500 pl-3";
-                    } else {
-                      bgClass = "pl-3 opacity-80";
-                    }
+                if (targetDiff) {
+                  return (
+                    <div className="font-mono text-xs space-y-0.5">
+                      {targetDiff.split('\n').map((line, idx) => {
+                        let colorClass = "text-zinc-500 opacity-60"; // Các dòng không đổi sẽ được làm mờ nhẹ
+                        let bgClass = "pl-3";
+                        const isAdd = line.startsWith('+') && !line.startsWith('+++');
+                        const isDel = line.startsWith('-') && !line.startsWith('---');
 
-                    return (
-                      <div key={idx} className={`whitespace-pre py-0.5 ${bgClass} ${colorClass}`}>
-                        {line}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-zinc-400 italic text-center py-20">Không phát hiện thay đổi nào trên tệp tin này.</div>
-              )}
+                        if (isAdd) {
+                          colorClass = "text-emerald-400 font-semibold diff-line-add";
+                          bgClass = "bg-emerald-950/45 border-l-2 border-emerald-500 pl-3";
+                        } else if (isDel) {
+                          colorClass = "text-rose-400 font-semibold diff-line-del";
+                          bgClass = "bg-rose-950/45 border-l-2 border-rose-500 pl-3";
+                        } else {
+                          bgClass = "pl-3 opacity-80";
+                        }
+
+                        // Tách ký tự đầu dòng trước khi làm sáng cú pháp
+                        const codeContent = (isAdd || isDel) ? line.substring(1) : line;
+                        const highlightedHtml = highlightCodeLine(codeContent);
+
+                        return (
+                          <div key={idx} className={`whitespace-pre py-0.5 leading-normal ${bgClass} ${colorClass}`}>
+                            {isAdd && <span className="text-emerald-500 font-bold mr-1 select-none">+ </span>}
+                            {isDel && <span className="text-rose-500 font-bold mr-1 select-none">- </span>}
+                            <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-zinc-400 italic text-center py-20">
+                      Không phát hiện thay đổi nào thuộc chế độ xem này.
+                    </div>
+                  );
+                }
+              })()}
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
