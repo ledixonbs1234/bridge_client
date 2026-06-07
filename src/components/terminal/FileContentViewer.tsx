@@ -23,6 +23,35 @@ export function FileContentViewer({ content, filePath, totalLines }: FileContent
     const fileName = filePath.split('/').pop() || filePath;
     const hasContent = !!content && content.trim().length > 0;
 
+    // PHÂN TÍCH THÔNG MINH: Phát hiện nếu nội dung file là một tệp hình ảnh mã hóa dạng Base64
+    let imageBase64: string | null = null;
+    let cleanContent = content;
+
+    try {
+        const parsed = JSON.parse(content);
+        const targetData = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
+        if (targetData && typeof targetData === 'object') {
+            if (targetData.image_base64) {
+                imageBase64 = targetData.image_base64;
+            } else if (targetData.data && targetData.data.image_base64) {
+                imageBase64 = targetData.data.image_base64;
+            }
+        }
+        if (imageBase64) {
+            const cleanObj = JSON.parse(content);
+            if (cleanObj.data && cleanObj.data.image_base64) {
+                cleanObj.data.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+            } else if (cleanObj.image_base64) {
+                cleanObj.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+            } else if (cleanObj.status === 'success' && cleanObj.data && typeof cleanObj.data === 'object') {
+                if (cleanObj.data.image_base64) {
+                    cleanObj.data.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+                }
+            }
+            cleanContent = JSON.stringify(cleanObj, null, 2);
+        }
+    } catch { }
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") setIsModalOpen(false);
@@ -82,10 +111,10 @@ export function FileContentViewer({ content, filePath, totalLines }: FileContent
                                 <button
                                     type="button"
                                     onClick={handleCopy}
-                                    disabled={!hasContent}
-                                    className={`px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors ${hasContent
-                                            ? 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 cursor-pointer'
-                                            : 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed'
+                                    disabled={!hasContent || !!imageBase64}
+                                    className={`px-3 py-1.5 border rounded-lg text-xs font-bold transition-colors ${hasContent && !imageBase64
+                                        ? 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 cursor-pointer'
+                                        : 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed'
                                         }`}
                                 >
                                     {copied ? 'Đã sao chép ✓' : 'Sao chép'}
@@ -101,7 +130,22 @@ export function FileContentViewer({ content, filePath, totalLines }: FileContent
 
                         <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-xs leading-relaxed text-left relative">
                             {hasContent ? (
-                                <pre className="whitespace-pre-wrap break-words">{content}</pre>
+                                imageBase64 ? (
+                                    <div className="flex flex-col gap-4 items-center h-full">
+                                        <div className="flex-1 flex items-center justify-center min-h-[300px] w-full bg-zinc-950/40 rounded-xl p-4 border border-zinc-800">
+                                            <img
+                                                src={imageBase64}
+                                                alt="Decoded Local Asset"
+                                                className="max-h-[50vh] max-w-full rounded-lg shadow-2xl object-contain border border-zinc-700"
+                                            />
+                                        </div>
+                                        <pre className="w-full whitespace-pre-wrap break-words border-t border-zinc-800 pt-4 mt-2 text-zinc-500 text-[10px]">
+                                            {cleanContent}
+                                        </pre>
+                                    </div>
+                                ) : (
+                                    <pre className="whitespace-pre-wrap break-words">{content}</pre>
+                                )
                             ) : (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 space-y-2">
                                     <span className="text-4xl opacity-50">📂</span>

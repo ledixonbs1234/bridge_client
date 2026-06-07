@@ -45,7 +45,7 @@ export const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, fo
                 >
                     ▼
                 </span>
-                <span className="text-zinc-650">
+                <span className="text-zinc-655">
                     Thought {thinkingCount}x, Read {fileCount}x, Run {commandCount}x
                 </span>
             </button>
@@ -295,9 +295,65 @@ export const CollapsibleSteps = React.memo(function CollapsibleSteps({ steps, fo
                                                 {step.output && (
                                                     <div className="space-y-1">
                                                         <div className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Result</div>
-                                                        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                                                            {step.output}
-                                                        </pre>
+                                                        {(() => {
+                                                            let imageBase64 = null;
+                                                            let cleanOutput = step.output;
+                                                            try {
+                                                                const parsed = JSON.parse(step.output);
+                                                                const targetData = parsed.status === 'success' && parsed.data ? parsed.data : parsed;
+                                                                if (targetData && typeof targetData === 'object') {
+                                                                    if (targetData.image_base64) {
+                                                                        imageBase64 = targetData.image_base64;
+                                                                    } else if (targetData.data && targetData.data.image_base64) {
+                                                                        imageBase64 = targetData.data.image_base64;
+                                                                    }
+                                                                }
+                                                                if (imageBase64) {
+                                                                    const cleanObj = JSON.parse(step.output);
+                                                                    if (cleanObj.data && cleanObj.data.image_base64) {
+                                                                        cleanObj.data.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+                                                                    } else if (cleanObj.image_base64) {
+                                                                        cleanObj.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+                                                                    } else if (cleanObj.status === 'success' && cleanObj.data && typeof cleanObj.data === 'object') {
+                                                                        if (cleanObj.data.image_base64) {
+                                                                            cleanObj.data.image_base64 = "[Base64 Image Data - Hidden for Performance]";
+                                                                        }
+                                                                    }
+                                                                    cleanOutput = JSON.stringify(cleanObj, null, 2);
+                                                                }
+                                                            } catch { }
+
+                                                            if (imageBase64) {
+                                                                return (
+                                                                    <div className="space-y-2 text-left">
+                                                                        <div className="relative inline-block max-w-full">
+                                                                            <img
+                                                                                src={imageBase64}
+                                                                                alt="Captured Screen Preview"
+                                                                                className="max-h-64 rounded-lg border border-zinc-200 shadow-md object-contain bg-zinc-50 p-1 cursor-zoom-in hover:opacity-95 transition-opacity"
+                                                                                onClick={() => {
+                                                                                    const w = window.open();
+                                                                                    if (w) {
+                                                                                        w.document.write(`<img src="${imageBase64}" style="max-width:100%; height:auto;" />`);
+                                                                                        w.document.close();
+                                                                                    }
+                                                                                }}
+                                                                                title="Nhấn để xem kích thước đầy đủ"
+                                                                            />
+                                                                        </div>
+                                                                        <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-700 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+                                                                            {cleanOutput}
+                                                                        </pre>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <pre className="p-2.5 bg-white border border-zinc-200 rounded-md text-[11px] text-zinc-700 whitespace-pre-wrap leading-relaxed">
+                                                                    {step.output}
+                                                                </pre>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 )}
                                             </div>
