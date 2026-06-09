@@ -1,4 +1,4 @@
-// filepath: ridge_client/src/App.tsx
+// filepath: bridge_client/src/App.tsx
 import { useState, useEffect } from "react";
 import { useSSE } from "./hooks/useSSE";
 import { WebTerminal } from "./components/WebTerminal";
@@ -427,8 +427,30 @@ export default function App() {
               setActiveModel={setActiveModel}
               sse={sse}
               workspaceData={workspaceData}
-              onViewDiff={handleViewDiffByPath} // Liên kết Callback
+              onViewDiff={handleViewDiffByPath}
             />
+          ) : activeTab === "traces" ? (
+            // --- NÂNG CẤP ĐẶC BIỆT: Bóc tách Trace khỏi container chật hẹp, mở rộng 100% chiều cao và chiều rộng như Search/Terminal ---
+            <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
+              <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
+                <div>
+                  <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>🔍</span> Trace Viewer
+                  </h2>
+                  <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("terminal")}
+                  className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
+                >
+                  ← Trở lại khung Chat
+                </button>
+              </header>
+
+              <div className="flex-1 overflow-hidden p-6 bg-zinc-50/10 h-full w-full">
+                <TraceViewer reloadTrigger={reloadTrigger} onViewDiff={handleViewDiffByPath} />
+              </div>
+            </div>
           ) : (
             <div className="flex-1 bg-white text-zinc-800 p-8 overflow-y-auto select-text border-l border-zinc-200">
               <div className="max-w-6xl mx-auto space-y-6">
@@ -438,13 +460,11 @@ export default function App() {
                       <span>⚡</span>{" "}
                       {activeTab === "telemetry"
                         ? "Telemetry Report"
-                        : activeTab === "traces"
-                          ? "Trace Viewer"
-                          : activeTab === "memory"
-                            ? "FluxMem Layer"
-                            : activeTab === "sandbox"
-                              ? "Shadow Transaction Manager"
-                              : "Telegram Config"}
+                        : activeTab === "memory"
+                          ? "FluxMem Layer"
+                          : activeTab === "sandbox"
+                            ? "Shadow Transaction Manager"
+                            : "Telegram Config"}
                     </h2>
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>
@@ -457,7 +477,6 @@ export default function App() {
                 </div>
 
                 {activeTab === "telemetry" && <Telemetry reloadTrigger={reloadTrigger} />}
-                {activeTab === "traces" && <TraceViewer reloadTrigger={reloadTrigger} />}
                 {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} />}
                 {activeTab === "sandbox" && <SandboxManager reloadTrigger={reloadTrigger} />}
                 {activeTab === "telegram" && <TelegramConfig />}

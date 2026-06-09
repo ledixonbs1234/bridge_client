@@ -28,7 +28,8 @@ interface ChatInputFormProps {
         prompt: string,
         useReformulate: boolean,
         useHeadless: boolean,
-        pastedImages: string[]
+        pastedImages: string[],
+        mode: 'default' | 'thinking' | 'fast'
     ) => void;
 }
 
@@ -62,6 +63,16 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         }
     });
 
+    // SỬA ĐỔI: Khởi tạo state chatMode lưu bền vững qua localStorage
+    const [chatMode, setChatMode] = useState<'default' | 'thinking' | 'fast'>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_chat_mode');
+            return (saved as 'default' | 'thinking' | 'fast') || 'default';
+        } catch {
+            return 'default';
+        }
+    });
+
     const [pastedImages, setPastedImages] = useState<string[]>([]);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [showCommandSuggest, setShowCommandSuggest] = useState(false);
@@ -75,6 +86,11 @@ export const ChatInputForm = React.memo(function ChatInputForm({
     useEffect(() => {
         localStorage.setItem('bridge_use_headless', JSON.stringify(useHeadless));
     }, [useHeadless]);
+
+    // SỬA ĐỔI: Lưu lựa chọn chatMode vào bộ nhớ trình duyệt
+    useEffect(() => {
+        localStorage.setItem('bridge_chat_mode', chatMode);
+    }, [chatMode]);
 
     useEffect(() => {
         setSuggestIndex(0);
@@ -103,7 +119,8 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         e.preventDefault();
         if ((!input.trim() && pastedImages.length === 0) || isGenerating) return;
 
-        onSendMessage(input, useReformulate, useHeadless, pastedImages);
+        // SỬA ĐỔI: Truyền kèm tham số chatMode đã chọn lên hàm callback gửi tin nhắn
+        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode);
         setInput('');
         setPastedImages([]);
         setShowCommandSuggest(false);
@@ -315,6 +332,25 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                             title="Chạy trình duyệt ẩn danh không giao diện"
                         >
                             ⚡ Headless: {useHeadless ? "ON" : "OFF"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setChatMode(prev => {
+                                    if (prev === 'default') return 'thinking';
+                                    if (prev === 'thinking') return 'fast';
+                                    return 'default';
+                                });
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono border transition-all cursor-pointer select-none ${chatMode === 'thinking'
+                                    ? "bg-purple-50 border-purple-200 text-purple-600"
+                                    : chatMode === 'fast'
+                                        ? "bg-amber-50 border-amber-200 text-amber-600"
+                                        : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
+                                }`}
+                            title="Chế độ hoạt động của Agent: Auto (Tự động) / Thinking (Suy nghĩ sâu) / Fast (Xử lý nhanh)"
+                        >
+                            {chatMode === 'thinking' ? "🧠 Mode: Thinking" : chatMode === 'fast' ? "⚡ Mode: Fast" : "🤖 Mode: Auto"}
                         </button>
                     </div>
 

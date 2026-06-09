@@ -20,10 +20,15 @@ export interface TimelineItem {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
-  image?: string; // Tương thích ngược với ảnh đơn
-  images?: string[]; // NÂNG CẤP: Hỗ trợ nhiều ảnh đồng thời
+  image?: string;
+  images?: string[];
   steps?: ExecutionStep[];
   timeline?: TimelineItem[];
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
 }
 
 export interface LogEntry {
@@ -55,9 +60,10 @@ export function useSSE(onGenerationComplete?: () => void) {
             role: m.role,
             content: m.content,
             image: m.image || undefined,
-            images: m.images || undefined, // Khôi phục danh sách ảnh cũ
+            images: m.images || undefined,
             steps: m.steps || [],
-            timeline: m.timeline || undefined
+            timeline: m.timeline || undefined,
+            usage: m.usage || undefined // 👈 BỔ SUNG DÒNG NÀY
           }));
           setMessages(loadedMessages);
 
@@ -86,7 +92,8 @@ export function useSSE(onGenerationComplete?: () => void) {
     images?: string[] | null, // NÂNG CẤP: Nhận mảng string base64 thay vì ảnh đơn
     agent?: string,
     model?: string,
-    headless?: boolean
+    headless?: boolean,
+    mode?: 'default' | 'thinking' | 'fast'
   ) => {
     setIsGenerating(true);
     setPendingPermission(null);
@@ -107,7 +114,8 @@ export function useSSE(onGenerationComplete?: () => void) {
           images, // Gửi mảng ảnh lên máy chủ
           agent,
           model,
-          headless
+          headless,
+          mode
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -160,7 +168,8 @@ export function useSSE(onGenerationComplete?: () => void) {
                     {
                       ...last,
                       content: last.content + parsed.content,
-                      timeline: updatedTimeline
+                      timeline: updatedTimeline,
+                      usage: parsed.usage || last.usage // Cập nhật usage real-time
                     }
                   ];
                 } else {
@@ -175,7 +184,8 @@ export function useSSE(onGenerationComplete?: () => void) {
                       role: 'assistant',
                       content: parsed.content,
                       steps: [],
-                      timeline: initialTimeline
+                      timeline: initialTimeline,
+                      usage: parsed.usage // Khởi tạo với usage đầu tiên
                     }
                   ];
                 }
@@ -429,7 +439,8 @@ export function useSSE(onGenerationComplete?: () => void) {
                   image: m.image || undefined,
                   images: m.images || undefined,
                   steps: m.steps || [],
-                  timeline: m.timeline || undefined
+                  timeline: m.timeline || undefined,
+                  usage: m.usage || undefined // 👈 BỔ SUNG DÒNG NÀY ĐỂ TRÁNH MẤT TOKEN KHI HOÀN TẤT
                 }));
 
                 if (loadedMessages.length === 0 && parsed.response) {

@@ -229,10 +229,12 @@ ${block}
     prompt: string,
     useReformulate: boolean,
     useHeadless: boolean,
-    pastedImages: string[]
+    pastedImages: string[],
+    mode: 'default' | 'thinking' | 'fast'
   ) => {
     shouldAutoScrollRef.current = true;
-    sendPrompt(prompt, useReformulate, pastedImages, activeAgent, activeModel, useHeadless);
+    // SỬA ĐỔI: Chuyển tiếp tham số mode sang hàm sendPrompt của SSE Hook
+    sendPrompt(prompt, useReformulate, pastedImages, activeAgent, activeModel, useHeadless, mode);
   }, [sendPrompt, activeAgent, activeModel]);
 
   const activePipeline = workspaceData?.pipeline;
@@ -341,6 +343,18 @@ ${block}
                           }
                           return null;
                         })}
+
+                        {/* KHU VỰC HIỂN THỊ TOKEN REAL-TIME */}
+                        {msg.usage && (
+                          <div className="text-[10px] text-zinc-400 font-mono px-1 flex items-center gap-1.5 select-none self-start">
+                            <span>📊 Token Usage:</span>
+                            <span>Input: <b className="text-zinc-650">{msg.usage.input_tokens.toLocaleString()}</b></span>
+                            <span>•</span>
+                            <span>Output: <b className="text-zinc-650">{msg.usage.output_tokens.toLocaleString()}</b></span>
+                            <span>•</span>
+                            <span>Total: <b className="text-zinc-700">{msg.usage.total_tokens ? msg.usage.total_tokens.toLocaleString() : (msg.usage.input_tokens + msg.usage.output_tokens).toLocaleString()}</b></span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div
