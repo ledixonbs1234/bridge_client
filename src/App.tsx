@@ -63,6 +63,7 @@ export interface WorkspaceData {
 }
 
 interface ShadowChange {
+  id?: string;          // Thêm thuộc tính id định danh duy nhất cho từng khung
   file: string;
   absolute_path: string;
   status: "added" | "modified" | "deleted" | string;
@@ -72,6 +73,7 @@ interface ShadowChange {
   latest_diff?: string;
   latest_additions?: number;
   latest_deletions?: number;
+  timestamp?: number;   // Thêm mốc thời gian ghi nhận thay đổi
 }
 
 export default function App() {
@@ -118,7 +120,49 @@ export default function App() {
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          setShadowChanges(data.changes || []);
+          setShadowChanges((prevHistory) => {
+            const incomingChanges = data.changes || [];
+            
+            // Nếu không còn tệp nào đang trong phiên giao dịch, xóa sạch lịch sử
+            if (incomingChanges.length === 0) {
+              return [];
+            }
+
+            let newHistory = [...prevHistory];
+
+            incomingChanges.forEach((incoming: ShadowChange) => {
+              // Tìm các thẻ lịch sử đã lưu của tệp tin cụ thể này
+              const fileHistory = newHistory.filter(h => h.absolute_path === incoming.absolute_path);
+              
+              if (fileHistory.length === 0) {
+                // Nếu là lần đầu tiên tệp này thay đổi, tạo thẻ mới đầu tiên
+                newHistory.push({
+                  ...incoming,
+                  id: `shadow_${incoming.file.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  timestamp: Date.now()
+                });
+              } else {
+                // Lấy thẻ thay đổi gần đây nhất của tệp này để đối chiếu
+                const latestCard = fileHistory[fileHistory.length - 1];
+                
+                // Nếu nội dung diff mới khác với diff của thẻ gần nhất -> Người dùng vừa thực hiện sửa đổi mới
+                if (latestCard.diff !== incoming.diff) {
+                  newHistory.push({
+                    ...incoming,
+                    id: `shadow_${incoming.file.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                    timestamp: Date.now()
+                  });
+                }
+              }
+            });
+
+            // Lọc bỏ các thẻ lịch sử của tệp tin nếu tệp đó không còn nằm trong danh sách cách ly của server 
+            // (Ví dụ tệp đã được committed thành công hoặc đã rollback hoàn toàn)
+            const activePaths = new Set(incomingChanges.map((c: ShadowChange) => c.absolute_path));
+            newHistory = newHistory.filter(h => activePaths.has(h.absolute_path));
+
+            return newHistory;
+          });
         }
       })
       .catch((err) => console.error("Error fetching shadow changes:", err));
@@ -356,50 +400,54 @@ export default function App() {
             </div>
 
             <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between items-center px-3">
+              <div className="flex justify-between items-center px-3 mb-1.5">
                 <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Shadow Changes</span>
                 {shadowChanges.length > 0 && (
                   <button
                     onClick={() => handleRollback()}
-                    className="text-[9px] text-red-600 hover:underline font-bold bg-transparent border-none cursor-pointer"
+                    className="text-[9px] text-red-600 hover:underline font-bold bg-transparent border-none cursor-pointer flex items-center gap-1"
                     title="Khôi phục tất cả các tệp về nguyên trạng"
                   >
                     ↩️ Reset All
                   </button>
                 )}
               </div>
-              <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
-                {shadowChanges.length === 0 ? (
+              
+              {shadowChanges.length === 0 ? (
+                <div className="px-3 py-3 bg-white border border-zinc-200 rounded-xl">
                   <p className="text-[10px] text-zinc-400 italic font-medium">Không có thay đổi nào.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                    {shadowChanges.map((change) => (
-                      <div key={change.file} className="flex items-center justify-between group hover:bg-zinc-50 rounded-md pr-1">
-                        <button
-                          onClick={() => setSelectedDiff(change)}
-                          className="flex-1 text-left flex flex-col p-1.5 transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent truncate"
-                        >
-                          <span className="text-zinc-750 font-bold truncate block" title={change.file}>
-                            {change.file.split('/').pop()}
-                          </span>
-                          <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
-                            {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
-                            {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
-                            {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => handleRollback(change.file)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 text-red-500 rounded text-xs border-none bg-transparent cursor-pointer transition-opacity"
-                          title={`Khôi phục tệp ${change.file.split('/').pop()} về nguyên trạng`}
-                        >
-                          ↩️
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                  {shadowChanges.map((change) => (
+                    <div 
+                      key={change.id || change.file} 
+                      className="bg-white border border-zinc-200 rounded-xl p-3 shadow-2xs flex items-center justify-between group hover:border-zinc-300 hover:shadow-xs transition-all"
+                    >
+                      <button
+                        onClick={() => setSelectedDiff(change)}
+                        className="flex-1 text-left flex flex-col transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent truncate"
+                      >
+                        <span className="text-zinc-750 font-bold truncate block" title={change.file}>
+                          {change.file.split('/').pop()}
+                        </span>
+                        <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
+                          {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
+                          {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
+                          {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleRollback(change.file)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 text-red-500 rounded-lg text-xs border-none bg-transparent cursor-pointer transition-opacity"
+                        title={`Khôi phục tệp ${change.file.split('/').pop()} về nguyên trạng`}
+                      >
+                        ↩️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -574,7 +622,7 @@ export default function App() {
                 });
 
                 // Render có gộp nhóm và thêm dấu "..." khi bỏ qua đoạn dài
-                const renderLines: JSX.Element[] = [];
+                const renderLines: any[] = [];
                 let prevVisibleIdx = -10; // Khởi tạo giá trị âm đủ lớn
 
                 Array.from(visibleIndices).sort((a, b) => a - b).forEach((idx) => {
