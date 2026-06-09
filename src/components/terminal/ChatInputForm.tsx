@@ -256,8 +256,8 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                     autoCorrect="off"
                     autoCapitalize="off"
                     placeholder="Nhập tin nhắn... (dùng / để xem phím tắt, dán nhiều ảnh từ clipboard)"
-                    rows={1}
-                    className="w-full bg-transparent border-none outline-none resize-none text-[15px] text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-0.5 min-h-[24px] max-h-32"
+                    rows={3}
+                    className="w-full bg-transparent border-none outline-none resize-y text-[15px] text-zinc-800 placeholder-zinc-400 p-1 leading-relaxed mb-0.5 min-h-[72px] max-h-48"
                 />
 
                 <div className="flex justify-between items-center border-t border-zinc-200/60 pt-2 mt-1 flex-wrap gap-1.5">
