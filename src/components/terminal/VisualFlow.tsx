@@ -16,7 +16,7 @@ import "reactflow/dist/style.css";
 import { useSSE, ChatMessage, ExecutionStep } from "../../hooks/useSSE";
 import { ChatInputForm } from "./ChatInputForm";
 import { WorkspaceData } from "../../App";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { marked } from "marked";
 
 // =================================================================
@@ -162,7 +162,47 @@ export function VisualFlow({
     const [realProviders, setRealProviders] = useState<any[]>([]);
     const [availableCommands, setAvailableCommands] = useState<any[]>([]);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-    const [showResponsePanel, setShowResponsePanel] = useState<boolean>(true);
+
+    // SỬA ĐỔI: Khởi tạo kích thước Panel và lưu bền vững vào localStorage
+    const [panelWidth, setPanelWidth] = useState<number>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_response_panel_width');
+            return saved ? parseInt(saved, 10) : 420;
+        } catch {
+            return 420;
+        }
+    });
+
+    const [panelHeight, setPanelHeight] = useState<number>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_response_panel_height');
+            return saved ? parseInt(saved, 10) : 350;
+        } catch {
+            return 350;
+        }
+    });
+
+    const [showResponsePanel, setShowResponsePanel] = useState<boolean>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_show_response_panel');
+            return saved !== null ? JSON.parse(saved) : true;
+        } catch {
+            return true;
+        }
+    });
+
+    // Đồng bộ thay đổi kích thước lên localStorage
+    useEffect(() => {
+        localStorage.setItem('bridge_response_panel_width', panelWidth.toString());
+    }, [panelWidth]);
+
+    useEffect(() => {
+        localStorage.setItem('bridge_response_panel_height', panelHeight.toString());
+    }, [panelHeight]);
+
+    useEffect(() => {
+        localStorage.setItem('bridge_show_response_panel', JSON.stringify(showResponsePanel));
+    }, [showResponsePanel]);
 
     // Khai báo quản lý trạng thái Node / Edge bằng Hook chuyên dụng
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -205,7 +245,7 @@ export function VisualFlow({
             });
     };
 
-    // Tìm và tóm tắt câu trả lời cuối cùng từ AI để hiện panel nổi
+    // Tìm phản hồi cuối cùng từ AI
     const lastAssistantMessage = useMemo(() => {
         return [...messages].reverse().find(m => m.role === 'assistant');
     }, [messages]);
@@ -219,7 +259,7 @@ export function VisualFlow({
         }
     }, [lastAssistantMessage]);
 
-    // Parse Markdown của Node đang được chọn chi tiết trong Inspector
+    // Parse Markdown của Node đang được chọn trong Inspector
     const inspectorHtml = useMemo(() => {
         if (!selectedNode || !selectedNode.data.content) return '';
         try {
@@ -229,6 +269,40 @@ export function VisualFlow({
         }
     }, [selectedNode]);
 
+    // Xử lý kéo dãn Panel (Resize Handler)
+    const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
+    const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeStart.current = {
+            x: e.clientX,
+            y: e.clientY,
+            w: panelWidth,
+            h: panelHeight
+        };
+        e.currentTarget.setPointerCapture(e.pointerId);
+    };
+
+    const handleResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!resizeStart.current) return;
+        const deltaX = e.clientX - resizeStart.current.x;
+        const deltaY = e.clientY - resizeStart.current.y;
+
+        // Vì panel neo góc bên phải, kéo chuột sang bên trái (deltaX âm) -> rộng ra
+        const newWidth = Math.max(260, Math.min(900, resizeStart.current.w - deltaX));
+        // Kéo chuột xuống dưới (deltaY dương) -> cao lên
+        const newHeight = Math.max(150, Math.min(700, resizeStart.current.h + deltaY));
+
+        setPanelWidth(newWidth);
+        setPanelHeight(newHeight);
+    };
+
+    const handleResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        resizeStart.current = null;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
     // 🧬 ĐỒNG BỘ TRẠNG THÁI: Tự động chuyển đổi chuỗi tin nhắn sang Node & Edge khi có thay đổi
     useEffect(() => {
         const nodesList: Node[] = [];
@@ -236,7 +310,6 @@ export function VisualFlow({
         let lastNodeId: string | null = null;
         let latestUserNodeId: string | null = null; // Theo dõi prompt người dùng gần nhất để liên kết đầu vào
 
-        // Tọa độ tĩnh của các cột được giãn cách hợp lý tránh va chạm/chồng chéo
         const colX = {
             user: 50,
             orchestrator: 400,
@@ -251,7 +324,7 @@ export function VisualFlow({
         const runningStepKey = workspaceData?.activeTask?.step_key || '';
         const currentStepMap = workspaceData?.states || [];
 
-        // Trợ lý chèn node và kế thừa tọa độ đã kéo thả thực tế từ Ref
+        // Helper chèn node có bảo toàn tọa độ kéo thả từ Ref
         const addNode = (node: Node) => {
             const existingNode = nodesRef.current.find(n => n.id === node.id);
             if (existingNode) {
@@ -480,7 +553,7 @@ export function VisualFlow({
                     />
                 </ReactFlow>
 
-                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL */}
+                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL (WITH DYNAMIC RESIZING) */}
                 {lastAssistantMessage && (
                     <div className="absolute top-4 right-4 z-40 flex flex-col items-end pointer-events-none select-none">
                         <button
@@ -492,14 +565,33 @@ export function VisualFlow({
                         </button>
 
                         {showResponsePanel && (
-                            <div className="mt-2 bg-zinc-950/95 border border-zinc-800 text-zinc-200 rounded-xl shadow-2xl p-4 overflow-y-auto max-h-[50vh] w-80 md:w-[420px] backdrop-blur-md text-left pointer-events-auto select-text scrollbar-thin">
-                                <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest font-mono mb-2 pb-1.5 border-b border-zinc-800">
+                            <div
+                                style={{ width: `${panelWidth}px`, height: `${panelHeight}px` }}
+                                className="mt-2 bg-zinc-950/95 border border-zinc-800 text-zinc-200 rounded-xl shadow-2xl p-4 backdrop-blur-md text-left pointer-events-auto select-text relative flex flex-col"
+                            >
+                                <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest font-mono mb-2 pb-1.5 border-b border-zinc-800 shrink-0 select-none">
                                     🤖 Latest Assistant Output
                                 </h3>
                                 <div
-                                    className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                    className="markdown-body-dark text-[14px] leading-relaxed select-text flex-1 overflow-y-auto scrollbar-thin pr-1"
                                     dangerouslySetInnerHTML={{ __html: lastAssistantContentHtml }}
                                 />
+
+                                {/* Diagonal Resize Handle at bottom-left corner */}
+                                <div
+                                    onPointerDown={handleResizePointerDown}
+                                    onPointerMove={handleResizePointerMove}
+                                    onPointerUp={handleResizePointerUp}
+                                    onPointerCancel={handleResizePointerUp}
+                                    className="absolute bottom-1 left-1 w-5 h-5 cursor-nesw-resize flex items-end justify-start p-0.5 select-none z-50 group/resize pointer-events-auto"
+                                    style={{ touchAction: 'none' }}
+                                    title="Kéo thả để điều chỉnh kích thước"
+                                >
+                                    <svg width="10" height="10" viewBox="0 0 10 10" className="text-zinc-600 group-hover/resize:text-cyan-400 transition-colors">
+                                        <line x1="0" y1="10" x2="10" y2="0" stroke="currentColor" strokeWidth="1.5" />
+                                        <line x1="0" y1="5" x2="5" y2="0" stroke="currentColor" strokeWidth="1" />
+                                    </svg>
+                                </div>
                             </div>
                         )}
                     </div>

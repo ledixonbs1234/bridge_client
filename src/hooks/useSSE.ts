@@ -90,7 +90,7 @@ export function useSSE(onGenerationComplete?: () => void) {
   const sendPrompt = useCallback(async (
     prompt: string,
     useReformulate: boolean,
-    images?: string[] | null, // NÂNG CẤP: Nhận mảng string base64 thay vì ảnh đơn
+    images?: string[] | null,
     agent?: string,
     model?: string,
     headless?: boolean,
@@ -100,7 +100,12 @@ export function useSSE(onGenerationComplete?: () => void) {
     setPendingPermission(null);
     abortControllerRef.current = new AbortController();
 
-    setMessages((prev) => [...prev, { role: 'user', content: prompt, images: images || undefined }]);
+    // SỬA ĐỔI CHÍNH: Khởi tạo sẵn một Assistant Message rỗng cùng lúc với tin nhắn của User
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: prompt, images: images || undefined },
+      { role: 'assistant', content: '', steps: [], timeline: [] }
+    ]);
 
     let currentSteps: ExecutionStep[] = [];
 
@@ -112,7 +117,7 @@ export function useSSE(onGenerationComplete?: () => void) {
           message: prompt,
           stream: true,
           useReformulate,
-          images, // Gửi mảng ảnh lên máy chủ
+          images,
           agent,
           model,
           headless,
@@ -170,7 +175,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                       ...last,
                       content: last.content + parsed.content,
                       timeline: updatedTimeline,
-                      usage: parsed.usage || last.usage // Cập nhật usage real-time
+                      usage: parsed.usage || last.usage
                     }
                   ];
                 } else {
@@ -186,7 +191,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                       content: parsed.content,
                       steps: [],
                       timeline: initialTimeline,
-                      usage: parsed.usage // Khởi tạo với usage đầu tiên
+                      usage: parsed.usage
                     }
                   ];
                 }
@@ -276,7 +281,7 @@ export function useSSE(onGenerationComplete?: () => void) {
               });
             } else if (parsed.type === 'action') {
               const tool = parsed.tool || '';
-              let stepType: 'terminal' | 'read_file' | 'search' | 'generic' = 'generic';
+              let stepType: 'terminal' | 'read_file' | 'search' | 'generic' | 'agent' = 'generic';
               let cleanTitle = `Execute ${tool}`;
 
               if (tool.includes('bash') || tool.includes('command') || tool.includes('run') || tool.includes('terminal')) {
@@ -300,6 +305,10 @@ export function useSSE(onGenerationComplete?: () => void) {
               } else if (tool.includes('search') || tool.includes('grep') || tool.includes('find')) {
                 stepType = 'search';
                 cleanTitle = `Search ${parsed.input || parsed.pattern || 'query'}`;
+              } else if (parsed.step_id && parsed.step_id.startsWith('worker_')) {
+                // Hỗ trợ đồng bộ hóa kiểu dữ liệu Worker Agent ngầm
+                stepType = 'agent';
+                cleanTitle = parsed.tool || 'Worker Agent';
               }
 
               const newStep: ExecutionStep = {
@@ -426,12 +435,6 @@ export function useSSE(onGenerationComplete?: () => void) {
                 }
                 return prev;
               });
-            } else if (parsed.type === 'ask_permission') {
-              setPendingPermission({
-                id: parsed.id,
-                query: parsed.query,
-                details: parsed.details
-              });
             } else if (parsed.type === 'done') {
               if (parsed.history) {
                 const loadedMessages: ChatMessage[] = parsed.history.map((m: any) => ({
@@ -441,35 +444,14 @@ export function useSSE(onGenerationComplete?: () => void) {
                   images: m.images || undefined,
                   steps: m.steps || [],
                   timeline: m.timeline || undefined,
-                  usage: m.usage || undefined // 👈 BỔ SUNG DÒNG NÀY ĐỂ TRÁNH MẤT TOKEN KHI HOÀN TẤT
+                  usage: m.usage || undefined
                 }));
-
-                if (loadedMessages.length === 0 && parsed.response) {
-                  loadedMessages.push({
-                    role: 'assistant',
-                    content: parsed.response,
-                    timeline: [{
-                      id: 'info-' + Math.random().toString(36).substring(2, 9),
-                      type: 'text',
-                      content: parsed.response
-                    }]
-                  });
-
-                  setLogs((prev) => [
-                    ...prev,
-                    {
-                      timestamp: new Date().toLocaleTimeString(),
-                      text: `🧹 ${parsed.response}`,
-                      type: 'default'
-                    }
-                  ]);
-                }
                 setMessages(loadedMessages);
               }
               if (onGenerationComplete) onGenerationComplete();
             }
           } catch (e) {
-            // Bỏ qua lỗi
+            // ignore
           }
         }
       }
