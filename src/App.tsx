@@ -1,7 +1,6 @@
-// filepath: bridge_client/src/App.tsx
 import { useState, useEffect } from "react";
 import { useSSE } from "./hooks/useSSE";
-import { WebTerminal } from "./components/WebTerminal";
+import { VisualFlow } from "./components/terminal/VisualFlow";
 import { Telemetry } from "./components/Telemetry";
 import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
@@ -9,7 +8,7 @@ import { TelegramConfig } from "./components/TelegramConfig";
 import { SandboxManager } from "./components/SandboxManager";
 import { highlightCodeLine } from "./lib/utils";
 
-type TabPanel = "terminal" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox";
+type TabPanel = "flow" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox";
 
 export interface WorkspaceData {
   success: boolean;
@@ -63,7 +62,7 @@ export interface WorkspaceData {
 }
 
 interface ShadowChange {
-  id?: string;          // Thêm thuộc tính id định danh duy nhất cho từng khung
+  id?: string;
   file: string;
   absolute_path: string;
   status: "added" | "modified" | "deleted" | string;
@@ -73,11 +72,11 @@ interface ShadowChange {
   latest_diff?: string;
   latest_additions?: number;
   latest_deletions?: number;
-  timestamp?: number;   // Thêm mốc thời gian ghi nhận thay đổi
+  timestamp?: number;
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabPanel>("terminal");
+  const [activeTab, setActiveTab] = useState<TabPanel>("flow"); // tab "flow" thay cho Web Terminal
   const [goal, setGoal] = useState<string | null>(null);
 
   const [activeAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
@@ -122,8 +121,6 @@ export default function App() {
         if (data.success) {
           setShadowChanges((prevHistory) => {
             const incomingChanges = data.changes || [];
-            
-            // Nếu không còn tệp nào đang trong phiên giao dịch, xóa sạch lịch sử
             if (incomingChanges.length === 0) {
               return [];
             }
@@ -131,21 +128,16 @@ export default function App() {
             let newHistory = [...prevHistory];
 
             incomingChanges.forEach((incoming: ShadowChange) => {
-              // Tìm các thẻ lịch sử đã lưu của tệp tin cụ thể này
               const fileHistory = newHistory.filter(h => h.absolute_path === incoming.absolute_path);
-              
+
               if (fileHistory.length === 0) {
-                // Nếu là lần đầu tiên tệp này thay đổi, tạo thẻ mới đầu tiên
                 newHistory.push({
                   ...incoming,
                   id: `shadow_${incoming.file.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
                   timestamp: Date.now()
                 });
               } else {
-                // Lấy thẻ thay đổi gần đây nhất của tệp này để đối chiếu
                 const latestCard = fileHistory[fileHistory.length - 1];
-                
-                // Nếu nội dung diff mới khác với diff của thẻ gần nhất -> Người dùng vừa thực hiện sửa đổi mới
                 if (latestCard.diff !== incoming.diff) {
                   newHistory.push({
                     ...incoming,
@@ -156,8 +148,6 @@ export default function App() {
               }
             });
 
-            // Lọc bỏ các thẻ lịch sử của tệp tin nếu tệp đó không còn nằm trong danh sách cách ly của server 
-            // (Ví dụ tệp đã được committed thành công hoặc đã rollback hoàn toàn)
             const activePaths = new Set(incomingChanges.map((c: ShadowChange) => c.absolute_path));
             newHistory = newHistory.filter(h => activePaths.has(h.absolute_path));
 
@@ -198,7 +188,6 @@ export default function App() {
     };
   }, [selectedDiff]);
 
-  // Tự động tìm kiếm và cuộn khung nhìn đến dòng thay đổi đầu tiên khi mở Modal
   useEffect(() => {
     if (selectedDiff) {
       const timer = setTimeout(() => {
@@ -211,12 +200,10 @@ export default function App() {
     }
   }, [selectedDiff, diffMode]);
 
-  // Bộ dò tìm và mở hộp thoại Diff từ đường dẫn tệp tin (Đồng bộ tuyệt đối)
   const handleViewDiffByPath = (filePath: string) => {
     if (!filePath) return;
     const cleanInputPath = filePath.replace(/\\/g, '/').toLowerCase();
 
-    // 1. Dò tìm chính xác bằng absolute_path tuyệt đối trong bộ nhớ đệm Sandbox
     const foundInShadow = shadowChanges.find(c => {
       const cleanAbs = c.absolute_path.replace(/\\/g, '/').toLowerCase();
       return cleanAbs === cleanInputPath || cleanAbs.endsWith(cleanInputPath) || cleanInputPath.endsWith(cleanAbs);
@@ -226,7 +213,6 @@ export default function App() {
       setDiffMode('latest');
       setSelectedDiff(foundInShadow);
     } else {
-      // 2. Dự phòng: Dò tìm bằng absolute_path tuyệt đối trong Git changes thực tế
       fetch("/api/dashboard/code-changes")
         .then((res) => res.json())
         .then((data) => {
@@ -335,7 +321,7 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => setActiveTab("terminal")}
+              onClick={() => setActiveTab("flow")}
               className="flex items-center justify-center gap-2 w-full border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
             >
               <span className="text-sm font-bold">+</span> New task
@@ -343,28 +329,28 @@ export default function App() {
 
             <nav className="space-y-1">
               <button
+                onClick={() => setActiveTab("flow")}
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "flow" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
+              >
+                <span className="text-sm">🌐</span> Visual Flow
+              </button>
+              <button
                 onClick={() => setActiveTab("traces")}
                 className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
-                <span className="text-sm">🔍</span> Search
+                <span className="text-sm">🔍</span> Search Traces
               </button>
               <button
                 onClick={() => setActiveTab("telemetry")}
                 className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telemetry" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
-                <span className="text-sm">📊</span> Skills
-              </button>
-              <button
-                onClick={() => setActiveTab("terminal")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "terminal" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">📅</span> Scheduled
+                <span className="text-sm">📊</span> Skills Telemetry
               </button>
               <button
                 onClick={() => setActiveTab("memory")}
                 className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "memory" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
               >
-                <span className="text-sm">🧠</span> Assets
+                <span className="text-sm">🧠</span> FluxMem Assets
               </button>
               <button
                 onClick={() => setActiveTab("sandbox")}
@@ -412,7 +398,7 @@ export default function App() {
                   </button>
                 )}
               </div>
-              
+
               {shadowChanges.length === 0 ? (
                 <div className="px-3 py-3 bg-white border border-zinc-200 rounded-xl">
                   <p className="text-[10px] text-zinc-400 italic font-medium">Không có thay đổi nào.</p>
@@ -420,8 +406,8 @@ export default function App() {
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
                   {shadowChanges.map((change) => (
-                    <div 
-                      key={change.id || change.file} 
+                    <div
+                      key={change.id || change.file}
                       className="bg-white border border-zinc-200 rounded-xl p-3 shadow-2xs flex items-center justify-between group hover:border-zinc-300 hover:shadow-xs transition-all"
                     >
                       <button
@@ -468,8 +454,8 @@ export default function App() {
         </aside>
 
         <main className="flex-1 flex flex-col bg-white overflow-hidden h-full relative">
-          {activeTab === "terminal" ? (
-            <WebTerminal
+          {activeTab === "flow" ? (
+            <VisualFlow
               activeAgent={activeAgent}
               activeModel={activeModel}
               setActiveModel={setActiveModel}
@@ -478,7 +464,6 @@ export default function App() {
               onViewDiff={handleViewDiffByPath}
             />
           ) : activeTab === "traces" ? (
-            // --- NÂNG CẤP ĐẶC BIỆT: Bóc tách Trace khỏi container chật hẹp, mở rộng 100% chiều cao và chiều rộng như Search/Terminal ---
             <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
               <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
                 <div>
@@ -488,10 +473,10 @@ export default function App() {
                   <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                 </div>
                 <button
-                  onClick={() => setActiveTab("terminal")}
+                  onClick={() => setActiveTab("flow")}
                   className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
                 >
-                  ← Trở lại khung Chat
+                  ← Trở lại sơ đồ Node
                 </button>
               </header>
 
@@ -517,10 +502,10 @@ export default function App() {
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>
                   <button
-                    onClick={() => setActiveTab("terminal")}
+                    onClick={() => setActiveTab("flow")}
                     className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
                   >
-                    ← Trở lại khung Chat
+                    ← Trở lại sơ đồ Node
                   </button>
                 </div>
 
@@ -534,12 +519,11 @@ export default function App() {
         </main>
       </div>
 
-      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) WITH MULTI-COLOR HIGHLIGHTING */}
+      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) */}
       {selectedDiff && (
         <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text">
           <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-fade-in text-zinc-800">
 
-            {/* Header */}
             <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
               <div className="text-left max-w-[50%]">
                 <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
@@ -550,7 +534,6 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Nút bấm chuyển đổi chế độ xem */}
               <div className="flex items-center gap-3">
                 <div className="flex items-center bg-zinc-100 rounded-lg border border-zinc-200 p-0.5">
                   <button
@@ -584,7 +567,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Diff View Area - CHỈ HIỂN THỊ DÒNG THAY ĐỔI + CONTEXT GIỚI HẠN */}
             <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-sm leading-relaxed text-left">
               {(() => {
                 const targetDiff = diffMode === 'latest'
@@ -599,7 +581,6 @@ export default function App() {
                   );
                 }
 
-                // Parse tất cả các dòng và đánh dấu index của dòng thay đổi
                 const allLines = targetDiff.split('\n');
                 const changeIndices: number[] = [];
 
@@ -611,7 +592,6 @@ export default function App() {
                   }
                 });
 
-                // Tạo tập hợp các index cần hiển thị (change + 3 dòng context trước/sau)
                 const visibleIndices = new Set<number>();
                 const CONTEXT_SIZE = 3;
 
@@ -621,12 +601,10 @@ export default function App() {
                   }
                 });
 
-                // Render có gộp nhóm và thêm dấu "..." khi bỏ qua đoạn dài
                 const renderLines: any[] = [];
-                let prevVisibleIdx = -10; // Khởi tạo giá trị âm đủ lớn
+                let prevVisibleIdx = -10;
 
                 Array.from(visibleIndices).sort((a, b) => a - b).forEach((idx) => {
-                  // Nếu khoảng cách giữa 2 dòng hiển thị > 1, chèn dấu "..."
                   if (idx - prevVisibleIdx > 1) {
                     renderLines.push(
                       <div key={`ellipsis-${idx}`} className="py-1 px-3 text-zinc-500 text-xs select-none">
@@ -639,7 +617,7 @@ export default function App() {
                   const isAdd = line.startsWith('+') && !line.startsWith('+++');
                   const isDel = line.startsWith('-') && !line.startsWith('---');
 
-                  let colorClass = "text-zinc-500 opacity-60";
+                  let colorClass = "text-zinc-500 opacity-80";
                   let bgClass = "pl-3";
 
                   if (isAdd) {

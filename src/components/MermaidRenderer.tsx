@@ -2,13 +2,23 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './animate-ui/button';
 import { motion, AnimatePresence } from 'motion/react';
-import mermaid from 'mermaid';
 
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default', // Changed from 'dark' to 'default' for better visibility in light mode
-  securityLevel: 'loose',
-});
+// 1. XÓA dòng import tĩnh này:
+// import mermaid from 'mermaid';
+
+// 2. KHAI BÁO hàm tải động mermaid để tái sử dụng
+let mermaidInstance: any = null;
+async function getMermaid() {
+  if (mermaidInstance) return mermaidInstance;
+  const m = (await import('mermaid')).default;
+  m.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+  });
+  mermaidInstance = m;
+  return m;
+}
 
 interface MermaidRendererProps {
   code: string;
@@ -23,24 +33,26 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
   const [scale, setScale] = useState<number>(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-
-  // THÊM: State lưu trữ kích thước logic tự nhiên của sơ đồ để phá vỡ lỗi layout CSS tuần hoàn
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef({ x: 0, y: 0 });
   const startOffset = useRef({ x: 0, y: 0 });
 
+  // 3. SỬA ĐỔI useEffect để sử dụng cơ chế tải chậm (lazy load)
   useEffect(() => {
     let active = true;
 
     const renderDiagram = async () => {
       try {
         setError(null);
-        await mermaid.parse(code);
+
+        // Gọi hàm tải động thay vì gọi trực tiếp từ import tĩnh
+        const m = await getMermaid();
+        await m.parse(code);
 
         const uniqueId = `mermaid-svg-${Math.round(Math.random() * 10000000)}`;
-        const { svg } = await mermaid.render(uniqueId, code);
+        const { svg } = await m.render(uniqueId, code);
 
         if (active) {
           setSvgHtml(svg);

@@ -18,7 +18,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'public', // Vite build xuất bản phẩm thẳng vào thư mục public của Express
+    // Sửa lại đường dẫn tuyệt đối đảm bảo tương thích hoàn toàn trên môi trường Windows
+    outDir: path.resolve(__dirname, '../bridge_server/public'),
     emptyOutDir: true,
   },
   server: {
