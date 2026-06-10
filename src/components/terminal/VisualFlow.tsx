@@ -20,51 +20,76 @@ import { AnimatePresence } from "motion/react";
 import { marked } from "marked";
 
 // =================================================================
-// 🌌 CUSTOM NEON NODES COMPONENTS FOR REACTFLOW
+// 🌌 CUSTOM MULTI-THEME NEON NODES COMPONENTS FOR REACTFLOW
 // =================================================================
 
-const CyberUserNode = ({ data }: any) => (
-    <div className="px-4 py-3 rounded-xl border border-cyan-400 bg-zinc-950/90 text-cyan-400 text-xs font-mono font-bold glow-neon-cyan shadow-lg relative min-w-[200px] max-w-[260px] text-left">
-        <div className="absolute top-0.5 right-2 text-[7px] text-cyan-500 select-none uppercase tracking-widest font-black">User Input</div>
-        <div className="border-b border-cyan-500/20 pb-1 mb-1.5 flex items-center gap-1.5 select-none">
-            <span>💬</span> PROMPT DECK
-        </div>
-        <div className="text-[11px] text-zinc-300 font-semibold line-clamp-3 select-text whitespace-pre-wrap leading-relaxed">
-            {data.content}
-        </div>
-        {data.images && data.images.length > 0 && (
-            <div className="mt-1.5 flex gap-1 select-none">
-                {data.images.map((img: string, idx: number) => (
-                    <img key={idx} src={img} className="w-8 h-8 rounded border border-cyan-400/30 object-cover" alt="pasted" />
-                ))}
-            </div>
-        )}
-        <Handle type="source" position={Position.Right} style={{ background: '#00f0ff', borderColor: '#00f0ff', width: '8px', height: '8px' }} />
-    </div>
-);
-
-const CyberAgentNode = ({ data }: any) => {
-    const isOrchestrator = data.name.includes("Orchestrator");
-    const glowClass = isOrchestrator ? "glow-neon-yellow border-amber-400 text-amber-400" : "glow-neon-magenta border-purple-400 text-purple-400";
-    const stateColor = data.state === "running" || data.state === "thinking" ? "text-amber-500 animate-pulse font-bold" : "text-emerald-500 font-bold";
+const CyberUserNode = ({ data }: any) => {
+    const isDark = data.theme !== 'light';
+    const bgClass = isDark
+        ? "bg-zinc-950/90 text-cyan-400 border-cyan-400 glow-neon-cyan"
+        : "bg-white/95 text-cyan-600 border-cyan-400 shadow-md";
+    const contentColor = isDark ? "text-zinc-300" : "text-zinc-700";
 
     return (
-        <div className={`px-4 py-3 rounded-xl border bg-zinc-950/90 text-xs font-mono glow-class shadow-lg relative min-w-[200px] max-w-[260px] text-left ${glowClass}`}>
-            <div className="absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80">
+        <div className={`px-4 py-3 rounded-xl border text-xs font-mono font-bold relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${bgClass}`}>
+            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black ${isDark ? "text-cyan-500" : "text-cyan-600"}`}>User Input</div>
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${isDark ? "border-cyan-500/20" : "border-cyan-200"}`}>
+                <span>💬</span> PROMPT DECK
+            </div>
+            <div className={`text-[11px] font-semibold line-clamp-3 select-text whitespace-pre-wrap leading-relaxed ${contentColor}`}>
+                {data.content}
+            </div>
+            {data.images && data.images.length > 0 && (
+                <div className="mt-1.5 flex gap-1 select-none">
+                    {data.images.map((img: string, idx: number) => (
+                        <img key={idx} src={img} className={`w-8 h-8 rounded border object-cover ${isDark ? "border-cyan-400/30" : "border-cyan-300"}`} alt="pasted" />
+                    ))}
+                </div>
+            )}
+            <Handle type="source" position={Position.Right} style={{ background: isDark ? '#00f0ff' : '#0ea5e9', borderColor: isDark ? '#00f0ff' : '#0ea5e9', width: '8px', height: '8px' }} />
+        </div>
+    );
+};
+
+const CyberAgentNode = ({ data }: any) => {
+    const isDark = data.theme !== 'light';
+    const isOrchestrator = data.name.includes("Orchestrator");
+
+    let glowClass = "";
+    if (isDark) {
+        glowClass = isOrchestrator
+            ? "glow-neon-yellow border-amber-400 text-amber-400 bg-zinc-950/90"
+            : "glow-neon-magenta border-purple-400 text-purple-400 bg-zinc-950/90";
+    } else {
+        glowClass = isOrchestrator
+            ? "border-amber-500 text-amber-600 bg-white/95 shadow-md"
+            : "border-purple-500 text-purple-600 bg-white/95 shadow-md";
+    }
+
+    const stateColor = data.state === "running" || data.state === "thinking"
+        ? "text-amber-500 animate-pulse font-bold"
+        : "text-emerald-500 font-bold";
+
+    const labelColor = isDark ? "text-zinc-400" : "text-zinc-600";
+    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
+
+    return (
+        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${glowClass}`}>
+            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
                 {isOrchestrator ? "Master Agent" : "Worker Agent"}
             </div>
-            <div className="border-b border-zinc-800 pb-1 mb-1.5 flex items-center gap-1.5 select-none">
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
                 <span>{isOrchestrator ? "👑" : "🤖"}</span> {data.name}
             </div>
             <div className="space-y-1">
-                <div className="text-[10px] text-zinc-400 font-medium leading-normal">
-                    <span className="text-zinc-500 font-semibold">Role:</span> {data.role}
+                <div className={`text-[10px] font-medium leading-normal ${labelColor}`}>
+                    <span className={`${isDark ? "text-zinc-500" : "text-zinc-400"} font-semibold`}>Role:</span> {data.role}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-medium">
-                    <span className="text-zinc-500 font-semibold">Model:</span> <span className="text-blue-400 font-bold">{data.model}</span>
+                <div className={`text-[10px] font-medium ${labelColor}`}>
+                    <span className={`${isDark ? "text-zinc-500" : "text-zinc-400"} font-semibold`}>Model:</span> <span className="font-bold" style={{ color: isDark ? '#60a5fa' : '#2563eb' }}>{data.model}</span>
                 </div>
-                <div className="text-[9px] mt-1 pt-1 border-t border-zinc-900 flex justify-between select-none">
-                    <span className="text-zinc-500">Status:</span>
+                <div className={`text-[9px] mt-1 pt-1 border-t flex justify-between select-none ${borderLineColor}`}>
+                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Status:</span>
                     <span className={stateColor}>{data.state?.toUpperCase()}</span>
                 </div>
             </div>
@@ -75,27 +100,50 @@ const CyberAgentNode = ({ data }: any) => {
 };
 
 const CyberToolNode = ({ data }: any) => {
+    const isDark = data.theme !== 'light';
     const isFailed = data.state === "failed";
-    const borderGlowClass = isFailed ? "glow-neon-magenta border-red-500 text-red-500" : data.state === "completed" ? "glow-neon-green border-emerald-400 text-emerald-400" : "glow-neon-orange border-orange-400 text-orange-400";
-    const stateColor = isFailed ? "text-red-500 font-bold" : data.state === "completed" ? "text-emerald-500 font-bold" : "text-orange-500 animate-pulse font-bold";
+
+    let borderGlowClass = "";
+    if (isDark) {
+        borderGlowClass = isFailed
+            ? "glow-neon-magenta border-red-500 text-red-500 bg-zinc-950/90"
+            : data.state === "completed"
+                ? "glow-neon-green border-emerald-400 text-emerald-400 bg-zinc-950/90"
+                : "glow-neon-orange border-orange-400 text-orange-400 bg-zinc-950/90";
+    } else {
+        borderGlowClass = isFailed
+            ? "border-red-500 text-red-600 bg-white/95 shadow-md"
+            : data.state === "completed"
+                ? "border-emerald-500 text-emerald-600 bg-white/95 shadow-md"
+                : "border-orange-500 text-orange-600 bg-white/95 shadow-md";
+    }
+
+    const stateColor = isFailed
+        ? "text-red-500 font-bold"
+        : data.state === "completed"
+            ? "text-emerald-500 font-bold"
+            : "text-orange-500 animate-pulse font-bold";
+
+    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
+    const labelColor = isDark ? "text-zinc-400" : "text-zinc-600";
 
     return (
-        <div className={`px-4 py-3 rounded-xl border bg-zinc-950/90 text-xs font-mono glow-class shadow-lg relative min-w-[200px] max-w-[260px] text-left ${borderGlowClass}`}>
-            <div className="absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80">
+        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${borderGlowClass}`}>
+            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
                 System Action
             </div>
-            <div className="border-b border-zinc-800 pb-1 mb-1.5 flex items-center gap-1.5 select-none">
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
                 <span>⚙️</span> TOOL EXECUTION
             </div>
             <div className="space-y-1">
-                <div className="text-[11px] font-bold text-zinc-100 truncate font-mono">
+                <div className={`text-[11px] font-bold truncate font-mono ${isDark ? "text-zinc-100" : "text-zinc-800"}`}>
                     {data.tool}
                 </div>
-                <div className="text-[10px] text-zinc-400 font-medium line-clamp-1 truncate select-text" title={data.title}>
+                <div className={`text-[10px] font-medium line-clamp-1 truncate select-text ${labelColor}`} title={data.title}>
                     {data.title}
                 </div>
-                <div className="text-[9px] mt-1 pt-1 border-t border-zinc-900 flex justify-between select-none">
-                    <span className="text-zinc-500">Status:</span>
+                <div className={`text-[9px] mt-1 pt-1 border-t flex justify-between select-none ${borderLineColor}`}>
+                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Status:</span>
                     <span className={stateColor}>{data.state?.toUpperCase()}</span>
                 </div>
             </div>
@@ -106,21 +154,43 @@ const CyberToolNode = ({ data }: any) => {
 };
 
 const CyberValidatorNode = ({ data }: any) => {
+    const isDark = data.theme !== 'light';
     const isFailed = data.state === "failed" || data.state === "blocked";
-    const borderGlowClass = isFailed ? "glow-neon-magenta border-red-500 text-red-500" : data.state === "passed" ? "glow-neon-green border-emerald-400 text-emerald-400" : "glow-neon-cyan border-cyan-400 text-cyan-400";
-    const stateColor = isFailed ? "text-red-500 font-bold animate-pulse" : data.state === "passed" ? "text-emerald-500 font-bold" : "text-cyan-500 animate-pulse font-bold";
+
+    let borderGlowClass = "";
+    if (isDark) {
+        borderGlowClass = isFailed
+            ? "glow-neon-magenta border-red-500 text-red-500 bg-zinc-950/90"
+            : data.state === "passed"
+                ? "glow-neon-green border-emerald-400 text-emerald-400 bg-zinc-950/90"
+                : "glow-neon-cyan border-cyan-400 text-cyan-400 bg-zinc-950/90";
+    } else {
+        borderGlowClass = isFailed
+            ? "border-red-500 text-red-600 bg-white/95 shadow-md"
+            : data.state === "passed"
+                ? "border-emerald-500 text-emerald-600 bg-white/95 shadow-md"
+                : "border-cyan-500 text-cyan-600 bg-white/95 shadow-md";
+    }
+
+    const stateColor = isFailed
+        ? "text-red-500 font-bold animate-pulse"
+        : data.state === "passed"
+            ? "text-emerald-500 font-bold"
+            : "text-cyan-500 animate-pulse font-bold";
+
+    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
 
     return (
-        <div className={`px-4 py-3 rounded-xl border bg-zinc-950/90 text-xs font-mono glow-class shadow-lg relative min-w-[200px] max-w-[260px] text-left ${borderGlowClass}`}>
-            <div className="absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80">
+        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${borderGlowClass}`}>
+            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
                 Strict Quality Gate
             </div>
-            <div className="border-b border-zinc-800 pb-1 mb-1.5 flex items-center gap-1.5 select-none">
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
                 <span>🛡️</span> {data.name}
             </div>
             <div className="space-y-1">
-                <div className="text-[9px] mt-1 pt-1 flex justify-between select-none">
-                    <span className="text-zinc-500">Verdict:</span>
+                <div className={`text-[9px] mt-1 pt-1 flex justify-between select-none ${borderLineColor}`}>
+                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Verdict:</span>
                     <span className={stateColor}>{data.state?.toUpperCase()}</span>
                 </div>
             </div>
@@ -163,7 +233,17 @@ export function VisualFlow({
     const [availableCommands, setAvailableCommands] = useState<any[]>([]);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
-    // SỬA ĐỔI: Khởi tạo kích thước Panel và lưu bền vững vào localStorage
+    // Khởi tạo Theme Sáng/Tối và lưu bền vững vào localStorage
+    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_flow_theme');
+            return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+        } catch {
+            return 'dark';
+        }
+    });
+
+    // Khởi tạo kích thước Panel và lưu bền vững vào localStorage
     const [panelWidth, setPanelWidth] = useState<number>(() => {
         try {
             const saved = localStorage.getItem('bridge_response_panel_width');
@@ -191,7 +271,11 @@ export function VisualFlow({
         }
     });
 
-    // Đồng bộ thay đổi kích thước lên localStorage
+    // Đồng bộ thay đổi kích thước & Theme lên localStorage
+    useEffect(() => {
+        localStorage.setItem('bridge_flow_theme', theme);
+    }, [theme]);
+
     useEffect(() => {
         localStorage.setItem('bridge_response_panel_width', panelWidth.toString());
     }, [panelWidth]);
@@ -324,12 +408,13 @@ export function VisualFlow({
         const runningStepKey = workspaceData?.activeTask?.step_key || '';
         const currentStepMap = workspaceData?.states || [];
 
-        // Helper chèn node có bảo toàn tọa độ kéo thả từ Ref
+        // Helper chèn node có bảo toàn tọa độ kéo thả từ Ref kèm tiêm (inject) Theme hiện hành
         const addNode = (node: Node) => {
             const existingNode = nodesRef.current.find(n => n.id === node.id);
             if (existingNode) {
                 node.position = existingNode.position;
             }
+            node.data = { ...node.data, theme }; // Tiêm theme vào data
             nodesList.push(node);
         };
 
@@ -354,7 +439,12 @@ export function VisualFlow({
                         source: lastNodeId,
                         target: userNodeId,
                         animated: false,
-                        style: { stroke: '#00f0ff', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.3 }
+                        style: {
+                            stroke: theme === 'dark' ? '#00f0ff' : '#0ea5e9',
+                            strokeWidth: 1,
+                            strokeDasharray: '4 4',
+                            opacity: theme === 'dark' ? 0.3 : 0.6
+                        }
                     });
                 }
 
@@ -386,7 +476,11 @@ export function VisualFlow({
                         source: latestUserNodeId,
                         target: orchNodeId,
                         animated: isStreaming && (!msg.steps || msg.steps.length === 0),
-                        style: { stroke: '#ffb700', strokeWidth: 2, filter: 'drop-shadow(0 0 5px #ffb700)' }
+                        style: {
+                            stroke: theme === 'dark' ? '#ffb700' : '#d97706',
+                            strokeWidth: 2,
+                            filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ffb700)' : undefined
+                        }
                     });
                 }
 
@@ -412,7 +506,11 @@ export function VisualFlow({
                         source: orchNodeId,
                         target: workerNodeId,
                         animated: isStreaming,
-                        style: { stroke: '#ff007f', strokeWidth: 2, filter: 'drop-shadow(0 0 5px #ff007f)' }
+                        style: {
+                            stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
+                            strokeWidth: 2,
+                            filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ff007f)' : undefined
+                        }
                     });
 
                     let lastToolNodeId: string | null = null;
@@ -442,7 +540,11 @@ export function VisualFlow({
                                 source: workerNodeId,
                                 target: stepNodeId,
                                 animated: isStepRunning,
-                                style: { stroke: '#ff007f', strokeWidth: 2, filter: 'drop-shadow(0 0 5px #ff007f)' }
+                                style: {
+                                    stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
+                                    strokeWidth: 2,
+                                    filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ff007f)' : undefined
+                                }
                             });
 
                             lastToolNodeId = stepNodeId;
@@ -468,9 +570,13 @@ export function VisualFlow({
                                 target: stepNodeId,
                                 animated: isStepRunning,
                                 style: {
-                                    stroke: step.output ? '#39ff14' : '#ff5e00',
+                                    stroke: step.output
+                                        ? (theme === 'dark' ? '#39ff14' : '#16a34a')
+                                        : (theme === 'dark' ? '#ff5e00' : '#ea580c'),
                                     strokeWidth: 1.5,
-                                    filter: step.output ? 'drop-shadow(0 0 3px #39ff14)' : 'drop-shadow(0 0 3px #ff5e00)'
+                                    filter: theme === 'dark'
+                                        ? (step.output ? 'drop-shadow(0 0 3px #39ff14)' : 'drop-shadow(0 0 3px #ff5e00)')
+                                        : undefined
                                 }
                             });
 
@@ -507,9 +613,15 @@ export function VisualFlow({
                         target: valNodeId,
                         animated: isValRunning,
                         style: {
-                            stroke: isValRunning ? '#00f0ff' : isBlocked ? '#ff007f' : '#39ff14',
+                            stroke: isValRunning
+                                ? (theme === 'dark' ? '#00f0ff' : '#0284c7')
+                                : isBlocked
+                                    ? (theme === 'dark' ? '#ff007f' : '#dc2626')
+                                    : (theme === 'dark' ? '#39ff14' : '#16a34a'),
                             strokeWidth: 2,
-                            filter: isValRunning ? 'drop-shadow(0 0 5px #00f0ff)' : isBlocked ? 'drop-shadow(0 0 5px #ff007f)' : 'drop-shadow(0 0 5px #39ff14)'
+                            filter: theme === 'dark'
+                                ? (isValRunning ? 'drop-shadow(0 0 5px #00f0ff)' : isBlocked ? 'drop-shadow(0 0 5px #ff007f)' : 'drop-shadow(0 0 5px #39ff14)')
+                                : undefined
                         }
                     });
 
@@ -521,10 +633,10 @@ export function VisualFlow({
 
         setNodes(nodesList as any);
         setEdges(edgesList as any);
-    }, [messages, isGenerating, activeModel, workspaceData, setNodes, setEdges]);
+    }, [messages, isGenerating, activeModel, workspaceData, setNodes, setEdges, theme]);
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-zinc-950 text-zinc-100 overflow-hidden relative select-none" style={{ height: '100%', minHeight: '500px' }}>
+        <div className={`flex-1 flex flex-col h-full overflow-hidden relative select-none transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-100 text-zinc-800'}`} style={{ height: '100%', minHeight: '500px' }}>
 
             {/* REACTFLOW MAIN CANVAS */}
             <div className="flex-1 h-full w-full relative" style={{ height: '100%' }}>
@@ -537,29 +649,48 @@ export function VisualFlow({
                     onNodeClick={(_, node) => setSelectedNode(node)}
                     fitView
                     fitViewOptions={{ padding: 0.15 }}
-                    className="bg-[#05050c]"
+                    className={theme === 'dark' ? 'bg-[#05050c]' : 'bg-[#f4f4f5]'}
                     proOptions={{ hideAttribution: true }}
                 >
-                    <Background color="#312e81" gap={16} size={1} />
-                    <Controls className="bg-zinc-900 border border-zinc-800 text-zinc-100" />
+                    <Background color={theme === 'dark' ? '#312e81' : '#cbd5e1'} gap={16} size={1} />
+                    <Controls className={theme === 'dark' ? 'bg-zinc-900 border border-zinc-800 text-zinc-100' : 'bg-white border border-zinc-200 text-zinc-800'} />
                     <MiniMap
                         nodeStrokeColor={(n) => {
-                            if (n.type === 'cyberUser') return '#00f0ff';
-                            if (n.type === 'cyberTool') return '#ff5e00';
-                            return '#ffb700';
+                            if (n.type === 'cyberUser') return theme === 'dark' ? '#00f0ff' : '#0ea5e9';
+                            if (n.type === 'cyberTool') return theme === 'dark' ? '#ff5e00' : '#ea580c';
+                            return theme === 'dark' ? '#ffb700' : '#d97706';
                         }}
-                        nodeColor={(n) => (n.type === 'cyberUser' ? '#00f0ff33' : '#ff5e0033')}
-                        className="bg-zinc-900/90 border border-zinc-800"
+                        nodeColor={(n) => (n.type === 'cyberUser' ? (theme === 'dark' ? '#00f0ff33' : '#0ea5e933') : (theme === 'dark' ? '#ff5e0033' : '#ea580c33'))}
+                        className={theme === 'dark' ? 'bg-zinc-900/90 border border-zinc-800' : 'bg-white/90 border border-zinc-200'}
+                        maskColor={theme === 'dark' ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)'}
                     />
                 </ReactFlow>
 
-                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL (WITH DYNAMIC RESIZING) */}
+                {/* 🌗 FLOATING THEME TOGGLE CONTROL */}
+                <div className="absolute top-4 left-4 z-40 flex gap-2 pointer-events-auto select-none">
+                    <button
+                        type="button"
+                        onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+                        className={`border rounded-lg p-2 text-xs font-bold cursor-pointer shadow-lg flex items-center gap-1.5 transition-all duration-200 ${theme === 'dark'
+                                ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
+                                : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                            }`}
+                        title="Chuyển đổi giao diện Sáng / Tối"
+                    >
+                        <span>{theme === 'dark' ? '☀️' : '🌙'}</span> {theme === 'dark' ? 'Sáng' : 'Tối'}
+                    </button>
+                </div>
+
+                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL (WITH DYNAMIC RESIZING & COOPERATING MARKDOWN THEME) */}
                 {lastAssistantMessage && (
                     <div className="absolute top-4 right-4 z-40 flex flex-col items-end pointer-events-none select-none">
                         <button
                             type="button"
                             onClick={() => setShowResponsePanel(!showResponsePanel)}
-                            className="bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white rounded-lg p-2 text-xs font-semibold cursor-pointer shadow-lg flex items-center gap-1.5 pointer-events-auto"
+                            className={`border text-xs font-semibold cursor-pointer shadow-lg flex items-center gap-1.5 pointer-events-auto rounded-lg p-2 transition-colors ${theme === 'dark'
+                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
+                                    : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                                }`}
                         >
                             <span>{showResponsePanel ? '👉' : '👈'}</span> AI Output Panel
                         </button>
@@ -567,13 +698,18 @@ export function VisualFlow({
                         {showResponsePanel && (
                             <div
                                 style={{ width: `${panelWidth}px`, height: `${panelHeight}px` }}
-                                className="mt-2 bg-zinc-950/95 border border-zinc-800 text-zinc-200 rounded-xl shadow-2xl p-4 backdrop-blur-md text-left pointer-events-auto select-text relative flex flex-col"
+                                className={`mt-2 border rounded-xl shadow-2xl p-4 backdrop-blur-md text-left pointer-events-auto select-text relative flex flex-col transition-colors ${theme === 'dark'
+                                        ? 'bg-zinc-950/95 border-zinc-800 text-zinc-200'
+                                        : 'bg-white/95 border-zinc-200 text-zinc-800'
+                                    }`}
                             >
-                                <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest font-mono mb-2 pb-1.5 border-b border-zinc-800 shrink-0 select-none">
+                                <h3 className={`text-[10px] font-bold uppercase tracking-widest font-mono mb-2 pb-1.5 border-b select-none ${theme === 'dark' ? 'text-cyan-400 border-zinc-800' : 'text-cyan-600 border-zinc-200'
+                                    }`}>
                                     🤖 Latest Assistant Output
                                 </h3>
                                 <div
-                                    className="markdown-body-dark text-[14px] leading-relaxed select-text flex-1 overflow-y-auto scrollbar-thin pr-1"
+                                    className={`text-[14px] leading-relaxed select-text flex-1 overflow-y-auto scrollbar-thin pr-1 ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
+                                        }`}
                                     dangerouslySetInnerHTML={{ __html: lastAssistantContentHtml }}
                                 />
 
@@ -652,50 +788,68 @@ export function VisualFlow({
                 </div>
             )}
 
-            {/* Cyberpunk Inspector Panel (LIGHTBOX MODAL) */}
+            {/* Cyberpunk Inspector Panel (LIGHTBOX MODAL WITH DYNAMIC THEMING) */}
             <AnimatePresence>
                 {selectedNode && (
                     <div
-                        className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text"
+                        className={`fixed inset-0 z-[99999] flex items-center justify-center p-4 select-text transition-colors duration-200 ${theme === 'dark' ? 'bg-black/85' : 'bg-zinc-900/60 backdrop-blur-xs'
+                            }`}
                         onClick={(e) => {
                             if (e.target === e.currentTarget) setSelectedNode(null);
                         }}
                     >
                         <div
-                            className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-3xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl relative"
-                            style={{ animation: 'zoomIn 0.2s ease-out', boxShadow: '0 0 30px rgba(0, 240, 255, 0.1)' }}
+                            className={`border rounded-2xl w-full max-w-3xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col relative transition-all duration-200 ${theme === 'dark'
+                                    ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+                                    : 'bg-white border-zinc-200 text-zinc-800 shadow-2xl'
+                                }`}
+                            style={{
+                                animation: 'zoomIn 0.2s ease-out',
+                                boxShadow: theme === 'dark' ? '0 0 30px rgba(0, 240, 255, 0.1)' : undefined
+                            }}
                         >
                             {/* Header */}
-                            <div className="px-6 py-4 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center select-none shrink-0">
+                            <div className={`px-6 py-4 flex justify-between items-center select-none shrink-0 transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-b border-zinc-800' : 'bg-zinc-50 border-b border-zinc-200'
+                                }`}>
                                 <div className="text-left">
-                                    <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest font-mono">
+                                    <h3 className={`text-xs font-bold uppercase tracking-widest font-mono ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'
+                                        }`}>
                                         🤖 trace node inspector
                                     </h3>
-                                    <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                    <p className={`text-[10px] font-mono mt-0.5 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'
+                                        }`}>
                                         Node ID: {selectedNode.id}
                                     </p>
                                 </div>
                                 <button
                                     onClick={() => setSelectedNode(null)}
-                                    className="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-mono font-bold text-zinc-400 hover:text-white cursor-pointer transition-colors"
+                                    className={`px-3.5 py-1.5 border rounded-lg text-xs font-mono font-bold cursor-pointer transition-colors ${theme === 'dark'
+                                            ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white'
+                                            : 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 hover:text-zinc-900'
+                                        }`}
                                 >
                                     CLOSE [Esc]
                                 </button>
                             </div>
 
                             {/* Node Contents Display */}
-                            <div className="flex-1 overflow-auto p-6 space-y-5 text-left bg-[#020204]">
-                                <div className="flex justify-between items-start flex-wrap gap-2 border-b border-zinc-900 pb-4">
+                            <div className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${theme === 'dark' ? 'bg-[#020204]' : 'bg-white'
+                                }`}>
+                                <div className={`flex justify-between items-start flex-wrap gap-2 border-b pb-4 ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-100'
+                                    }`}>
                                     <div>
                                         <h4 className="text-[10px] uppercase font-mono font-bold text-zinc-500 tracking-wider mb-0.5">Node Type</h4>
-                                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300 uppercase">
+                                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border transition-colors ${theme === 'dark'
+                                                ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                : 'bg-zinc-100 border-zinc-200 text-zinc-700'
+                                            }`}>
                                             {selectedNode.type}
                                         </span>
                                     </div>
                                     {selectedNode.data.state && (
                                         <div>
                                             <h4 className="text-[10px] uppercase font-mono font-bold text-zinc-500 tracking-wider mb-0.5">State</h4>
-                                            <span className="text-xs font-mono font-bold text-emerald-400">{selectedNode.data.state.toUpperCase()}</span>
+                                            <span className="text-xs font-mono font-bold text-emerald-500">{selectedNode.data.state.toUpperCase()}</span>
                                         </div>
                                     )}
                                 </div>
@@ -704,20 +858,22 @@ export function VisualFlow({
                                 {selectedNode.type === 'cyberUser' && (
                                     <div className="space-y-4">
                                         <div className="space-y-1">
-                                            <div className="text-xs font-bold text-cyan-500 select-none font-mono">💬 PROMPT CONTENT:</div>
-                                            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+                                            <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-cyan-500' : 'text-cyan-600'}`}>💬 PROMPT CONTENT:</div>
+                                            <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+                                                }`}>
                                                 <div
-                                                    className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                                    className={`text-[14px] leading-relaxed select-text ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
+                                                        }`}
                                                     dangerouslySetInnerHTML={{ __html: inspectorHtml }}
                                                 />
                                             </div>
                                         </div>
                                         {selectedNode.data.images && selectedNode.data.images.length > 0 && (
                                             <div className="space-y-1.5">
-                                                <div className="text-xs font-bold text-cyan-500 select-none font-mono">🖼️ UPLOADED VISUAL DATA:</div>
+                                                <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-cyan-500' : 'text-cyan-600'}`}>🖼️ UPLOADED VISUAL DATA:</div>
                                                 <div className="flex flex-wrap gap-2">
                                                     {selectedNode.data.images.map((img: string, idx: number) => (
-                                                        <img key={idx} src={img} className="max-h-40 rounded border border-zinc-800" alt="visual" />
+                                                        <img key={idx} src={img} className={`max-h-40 rounded border ${theme === 'dark' ? 'border-zinc-800' : 'border-zinc-200'}`} alt="visual" />
                                                     ))}
                                                 </div>
                                             </div>
@@ -728,17 +884,20 @@ export function VisualFlow({
                                 {/* AGENT NODE DETAILS */}
                                 {selectedNode.type === 'cyberAgent' && (
                                     <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4 text-xs font-mono text-zinc-400">
-                                            <div>• Name: <span className="text-zinc-200 font-bold">{selectedNode.data.name}</span></div>
-                                            <div>• Model: <span className="text-blue-400 font-bold">{selectedNode.data.model}</span></div>
-                                            <div>• Role: <span className="text-zinc-200 font-semibold">{selectedNode.data.role}</span></div>
+                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
+                                            }`}>
+                                            <div>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>
+                                            <div>• Model: <span className="font-bold" style={{ color: theme === 'dark' ? '#60a5fa' : '#2563eb' }}>{selectedNode.data.model}</span></div>
+                                            <div>• Role: <span className="font-semibold" style={{ color: theme === 'dark' ? '#e4e4e7' : '#3f3f46' }}>{selectedNode.data.role}</span></div>
                                         </div>
                                         {selectedNode.data.content && (
                                             <div className="space-y-1">
-                                                <div className="text-xs font-bold text-amber-500 select-none font-mono">🧠 THOUGHT PROCESS / RESPONSE:</div>
-                                                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+                                                <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-amber-500' : 'text-amber-600'}`}>🧠 THOUGHT PROCESS / RESPONSE:</div>
+                                                <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+                                                    }`}>
                                                     <div
-                                                        className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                                        className={`text-[14px] leading-relaxed select-text ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
+                                                            }`}
                                                         dangerouslySetInnerHTML={{ __html: inspectorHtml }}
                                                     />
                                                 </div>
@@ -750,9 +909,10 @@ export function VisualFlow({
                                 {/* TOOL NODE DETAILS */}
                                 {selectedNode.type === 'cyberTool' && (
                                     <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4 text-xs font-mono text-zinc-400">
-                                            <div>• Tool: <span className="text-orange-400 font-bold">{selectedNode.data.tool}</span></div>
-                                            <div>• Task Description: <span className="text-zinc-200 font-semibold">{selectedNode.data.title}</span></div>
+                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
+                                            }`}>
+                                            <div>• Tool: <span className="font-bold" style={{ color: theme === 'dark' ? '#f97316' : '#ea580c' }}>{selectedNode.data.tool}</span></div>
+                                            <div>• Task Description: <span className="font-semibold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.title}</span></div>
                                         </div>
 
                                         {/* RENDER CHI TIẾT FILE NẾU LÀ REPLACE/WRITE */}
@@ -760,14 +920,17 @@ export function VisualFlow({
                                             try {
                                                 const parsed = JSON.parse(selectedNode.data.input);
                                                 return (
-                                                    <div className="space-y-3 pt-3 border-t border-zinc-900">
-                                                        <div className="text-xs font-bold text-orange-500 select-none font-mono">📝 FILE MODIFICATION (REPLACE CONTENT SAFE)</div>
-                                                        <div className="text-xs text-zinc-400 font-mono">
+                                                    <div className={`space-y-3 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                        <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>📝 FILE MODIFICATION (REPLACE CONTENT SAFE)</div>
+                                                        <div className={`text-xs font-mono ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>
                                                             • File Path:{" "}
                                                             <button
                                                                 type="button"
                                                                 onClick={() => onViewDiff && onViewDiff(parsed.file_path)}
-                                                                className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 py-0.5 rounded text-blue-400 font-mono text-xs cursor-pointer select-text"
+                                                                className={`border px-2 py-0.5 rounded font-mono text-xs cursor-pointer select-text transition-colors ${theme === 'dark'
+                                                                        ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-blue-400'
+                                                                        : 'bg-zinc-100 border-zinc-200 hover:bg-zinc-200 text-blue-600'
+                                                                    }`}
                                                             >
                                                                 📄 {parsed.file_path} (Xem thay đổi 🔍)
                                                             </button>
@@ -775,13 +938,19 @@ export function VisualFlow({
                                                         <div className="space-y-2">
                                                             <div className="space-y-1">
                                                                 <div className="text-[10px] font-bold text-rose-500 select-none">❌ TARGET CONTENT (DELETED):</div>
-                                                                <pre className="p-3 bg-red-950/20 border border-red-900/40 rounded text-xs font-mono text-rose-300 max-h-32 overflow-auto whitespace-pre select-text leading-normal">
+                                                                <pre className={`p-3 border rounded text-xs font-mono max-h-32 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
+                                                                        ? 'bg-red-950/20 border-red-900/40 text-rose-300'
+                                                                        : 'bg-red-50 border-red-200 text-red-800'
+                                                                    }`}>
                                                                     {parsed.target_content}
                                                                 </pre>
                                                             </div>
                                                             <div className="space-y-1">
                                                                 <div className="text-[10px] font-bold text-emerald-500 select-none">✅ REPLACEMENT CONTENT (ADDED):</div>
-                                                                <pre className="p-3 bg-emerald-950/20 border border-emerald-900/40 rounded text-xs font-mono text-emerald-300 max-h-40 overflow-auto whitespace-pre select-text leading-normal">
+                                                                <pre className={`p-3 border rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
+                                                                        ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
+                                                                        : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                                    }`}>
                                                                     {parsed.replacement_content}
                                                                 </pre>
                                                             </div>
@@ -796,12 +965,15 @@ export function VisualFlow({
                                                 const parsed = JSON.parse(selectedNode.data.input);
                                                 const content = parsed.content_base64 ? atob(parsed.content_base64) : parsed.content;
                                                 return (
-                                                    <div className="space-y-3 pt-3 border-t border-zinc-900">
-                                                        <div className="text-xs font-bold text-orange-500 select-none font-mono">💾 CREATE / OVERWRITE (WRITE FILE)</div>
-                                                        <div className="text-xs text-zinc-400 font-mono">• File Path: <code className="bg-zinc-900 px-1.5 py-0.5 rounded text-zinc-300">{parsed.file_path}</code></div>
+                                                    <div className={`space-y-3 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                        <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>💾 CREATE / OVERWRITE (WRITE FILE)</div>
+                                                        <div className={`text-xs font-mono ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>• File Path: <code className={`px-1.5 py-0.5 rounded ${theme === 'dark' ? 'bg-zinc-900 text-zinc-350' : 'bg-zinc-100 text-zinc-700'}`}>{parsed.file_path}</code></div>
                                                         <div className="space-y-1">
                                                             <div className="text-[10px] font-bold text-teal-400 select-none">📝 FILE CONTENT:</div>
-                                                            <pre className="p-3 bg-zinc-900 border border-zinc-800 rounded text-xs font-mono text-zinc-300 max-h-40 overflow-auto whitespace-pre select-text leading-normal">
+                                                            <pre className={`p-3 border rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
+                                                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                                    : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                                                                }`}>
                                                                 {content}
                                                             </pre>
                                                         </div>
@@ -812,9 +984,12 @@ export function VisualFlow({
 
                                         {/* Standard Tool Inputs */}
                                         {selectedNode.data.input && !['replace_content_safe', 'write_file'].includes(selectedNode.data.tool) && (
-                                            <div className="space-y-1.5 pt-3 border-t border-zinc-900">
-                                                <div className="text-xs font-bold text-orange-500 select-none font-mono">⚙️ INPUT ARGUMENTS:</div>
-                                                <pre className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-blue-400 overflow-x-auto whitespace-pre-wrap select-text leading-relaxed">
+                                            <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>⚙️ INPUT ARGUMENTS:</div>
+                                                <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap select-text leading-relaxed transition-colors ${theme === 'dark'
+                                                        ? 'bg-zinc-900 border-zinc-800 text-blue-400'
+                                                        : 'bg-zinc-50 border-zinc-200 text-blue-600'
+                                                    }`}>
                                                     {selectedNode.data.input}
                                                 </pre>
                                             </div>
@@ -822,9 +997,12 @@ export function VisualFlow({
 
                                         {/* Tool Output / Result */}
                                         {selectedNode.data.output && (
-                                            <div className="space-y-1.5 pt-3 border-t border-zinc-900">
-                                                <div className="text-xs font-bold text-emerald-500 select-none font-mono">⚙️ OUTPUT RESPONSE:</div>
-                                                <pre className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-300 overflow-x-auto max-h-52 whitespace-pre select-text leading-normal">
+                                            <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                <div className="text-xs font-bold select-none font-mono text-emerald-500">⚙️ OUTPUT RESPONSE:</div>
+                                                <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto max-h-52 whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
+                                                        ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                        : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                                                    }`}>
                                                     {(() => {
                                                         try {
                                                             const parsed = JSON.parse(selectedNode.data.output);
@@ -845,10 +1023,11 @@ export function VisualFlow({
                                 {/* VALIDATOR NODE DETAILS */}
                                 {selectedNode.type === 'cyberValidator' && (
                                     <div className="space-y-4">
-                                        <div className="text-xs font-mono text-zinc-400">• Name: <span className="text-zinc-200 font-bold">{selectedNode.data.name}</span></div>
+                                        <div className={`text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'}`}>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>
                                         <div className="space-y-1">
-                                            <div className="text-xs font-bold text-magenta-500 select-none font-mono">🛡️ VERDICT ANALYSIS:</div>
-                                            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-sans text-zinc-200 select-text leading-relaxed whitespace-pre-wrap">
+                                            <div className="text-xs font-bold select-none font-mono text-pink-500">🛡️ VERDICT ANALYSIS:</div>
+                                            <div className={`p-4 border rounded-xl text-xs font-sans select-text leading-relaxed whitespace-pre-wrap transition-colors ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                                                }`}>
                                                 {selectedNode.data.state === 'passed' ? 'XÁC THỰC CÚ PHÁP & LOGIC THÀNH CÔNG. TẤT CẢ CHỈ SỐ PASS.' : 'ĐANG TRONG TIẾN TRÌNH XÁC THỰC...'}
                                             </div>
                                         </div>
