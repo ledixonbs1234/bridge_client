@@ -1,3 +1,4 @@
+// filepath: bridge_client/src/components/terminal/VisualFlow.tsx
 import * as React from "react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import ReactFlow, {
@@ -14,9 +15,9 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { useSSE, ChatMessage, ExecutionStep } from "../../hooks/useSSE";
 import { ChatInputForm } from "./ChatInputForm";
-import { highlightCodeLine } from "../../lib/utils";
 import { WorkspaceData } from "../../App";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { marked } from "marked";
 
 // =================================================================
 // 🌌 CUSTOM NEON NODES COMPONENTS FOR REACTFLOW
@@ -161,10 +162,17 @@ export function VisualFlow({
     const [realProviders, setRealProviders] = useState<any[]>([]);
     const [availableCommands, setAvailableCommands] = useState<any[]>([]);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [showResponsePanel, setShowResponsePanel] = useState<boolean>(true);
 
     // Khai báo quản lý trạng thái Node / Edge bằng Hook chuyên dụng
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+    // Sync nodes state with a ref to read current drag positions
+    const nodesRef = useRef<Node[]>([]);
+    useEffect(() => {
+        nodesRef.current = nodes;
+    }, [nodes]);
 
     useEffect(() => {
         fetch('/api/provider/config')
@@ -197,17 +205,60 @@ export function VisualFlow({
             });
     };
 
+    // Tìm và tóm tắt câu trả lời cuối cùng từ AI để hiện panel nổi
+    const lastAssistantMessage = useMemo(() => {
+        return [...messages].reverse().find(m => m.role === 'assistant');
+    }, [messages]);
+
+    const lastAssistantContentHtml = useMemo(() => {
+        if (!lastAssistantMessage || !lastAssistantMessage.content) return '';
+        try {
+            return marked.parse(lastAssistantMessage.content) as string;
+        } catch (e) {
+            return lastAssistantMessage.content;
+        }
+    }, [lastAssistantMessage]);
+
+    // Parse Markdown của Node đang được chọn chi tiết trong Inspector
+    const inspectorHtml = useMemo(() => {
+        if (!selectedNode || !selectedNode.data.content) return '';
+        try {
+            return marked.parse(selectedNode.data.content) as string;
+        } catch (e) {
+            return selectedNode.data.content;
+        }
+    }, [selectedNode]);
+
     // 🧬 ĐỒNG BỘ TRẠNG THÁI: Tự động chuyển đổi chuỗi tin nhắn sang Node & Edge khi có thay đổi
     useEffect(() => {
         const nodesList: Node[] = [];
         const edgesList: Edge[] = [];
         let lastNodeId: string | null = null;
         let latestUserNodeId: string | null = null; // Theo dõi prompt người dùng gần nhất để liên kết đầu vào
+
+        // Tọa độ tĩnh của các cột được giãn cách hợp lý tránh va chạm/chồng chéo
+        const colX = {
+            user: 50,
+            orchestrator: 400,
+            worker: 750,
+            tool: 1100,
+            validator: 1450
+        };
+
         const layerY = { 0: 60, 1: 60, 2: 60, 3: 60, 4: 60 };
 
         // Khai báo biến hỗ trợ hiển thị pipeline động
         const runningStepKey = workspaceData?.activeTask?.step_key || '';
         const currentStepMap = workspaceData?.states || [];
+
+        // Trợ lý chèn node và kế thừa tọa độ đã kéo thả thực tế từ Ref
+        const addNode = (node: Node) => {
+            const existingNode = nodesRef.current.find(n => n.id === node.id);
+            if (existingNode) {
+                node.position = existingNode.position;
+            }
+            nodesList.push(node);
+        };
 
         messages.forEach((msg: ChatMessage, msgIdx: number) => {
             const isLastMessage = msgIdx === messages.length - 1;
@@ -216,11 +267,11 @@ export function VisualFlow({
             // CHỈ VẼ PROMPT DECK NẾU TIN NHẮN ĐÓ LÀ CỦA USER
             if (msg.role === 'user') {
                 const userNodeId = `user-${msgIdx}`;
-                nodesList.push({
+                addNode({
                     id: userNodeId,
                     type: 'cyberUser',
                     data: { content: msg.content, images: msg.images },
-                    position: { x: 50, y: layerY[0] }
+                    position: { x: colX.user, y: layerY[0] }
                 });
 
                 // Vẽ đường nối tuần tự (Sequence) nối tiếp giữa các phiên hội thoại nếu có
@@ -242,7 +293,7 @@ export function VisualFlow({
             // CHỈ DỰNG LUỒNG AGENT VÀ TOOLS NẾU TIN NHẮN LÀ CỦA ASSISTANT
             if (msg.role === 'assistant') {
                 const orchNodeId = `orchestrator-${msgIdx}`;
-                nodesList.push({
+                addNode({
                     id: orchNodeId,
                     type: 'cyberAgent',
                     data: {
@@ -252,7 +303,7 @@ export function VisualFlow({
                         state: isStreaming && (!msg.steps || msg.steps.length === 0) ? 'thinking' : 'completed',
                         content: msg.content
                     },
-                    position: { x: 300, y: layerY[1] }
+                    position: { x: colX.orchestrator, y: layerY[1] }
                 });
 
                 // Liên kết Orchestrator trực tiếp với Prompt Deck thực tế của người dùng
@@ -271,7 +322,7 @@ export function VisualFlow({
 
                 if (msg.steps && msg.steps.length > 0) {
                     const workerNodeId = `worker-${msgIdx}`;
-                    nodesList.push({
+                    addNode({
                         id: workerNodeId,
                         type: 'cyberAgent',
                         data: {
@@ -280,7 +331,7 @@ export function VisualFlow({
                             model: activeModel,
                             state: isStreaming ? 'running' : 'completed'
                         },
-                        position: { x: 550, y: layerY[2] }
+                        position: { x: colX.worker, y: layerY[2] }
                     });
 
                     edgesList.push({
@@ -298,33 +349,61 @@ export function VisualFlow({
                         const isLastStep = sIdx === msg.steps!.length - 1;
                         const isStepRunning = isLastStep && isStreaming && !step.output;
 
-                        nodesList.push({
-                            id: stepNodeId,
-                            type: 'cyberTool',
-                            data: {
-                                title: step.title,
-                                tool: step.toolName || step.type,
-                                input: step.input,
-                                output: step.output,
-                                state: step.output ? 'completed' : (isStepRunning ? 'running' : 'completed')
-                            },
-                            position: { x: 800, y: layerY[3] }
-                        });
+                        if (step.type === 'agent') {
+                            // RENDER CÁC WORKER SUB-AGENTS CHUYÊN BIỆT THÀNH CYBERAGENT CHÍNH THỨC
+                            addNode({
+                                id: stepNodeId,
+                                type: 'cyberAgent',
+                                data: {
+                                    name: step.title || "Worker Agent",
+                                    role: "Specialist Sub-Agent",
+                                    model: step.toolName || "Worker",
+                                    state: step.output ? 'completed' : (isStepRunning ? 'running' : 'completed'),
+                                    content: step.output || step.input
+                                },
+                                position: { x: colX.worker, y: layerY[2] }
+                            });
 
-                        edgesList.push({
-                            id: `edge-${workerNodeId}-${stepNodeId}`,
-                            source: workerNodeId,
-                            target: stepNodeId,
-                            animated: isStepRunning,
-                            style: {
-                                stroke: step.output ? '#39ff14' : '#ff5e00',
-                                strokeWidth: 1.5,
-                                filter: step.output ? 'drop-shadow(0 0 3px #39ff14)' : 'drop-shadow(0 0 3px #ff5e00)'
-                            }
-                        });
+                            edgesList.push({
+                                id: `edge-${workerNodeId}-${stepNodeId}`,
+                                source: workerNodeId,
+                                target: stepNodeId,
+                                animated: isStepRunning,
+                                style: { stroke: '#ff007f', strokeWidth: 2, filter: 'drop-shadow(0 0 5px #ff007f)' }
+                            });
 
-                        lastToolNodeId = stepNodeId;
-                        layerY[3] += 180;
+                            lastToolNodeId = stepNodeId;
+                            layerY[2] += 220;
+                        } else {
+                            // VẼ CÁC SYSTEM ACTION TIÊU CHUẨN
+                            addNode({
+                                id: stepNodeId,
+                                type: 'cyberTool',
+                                data: {
+                                    title: step.title,
+                                    tool: step.toolName || step.type,
+                                    input: step.input,
+                                    output: step.output,
+                                    state: step.output ? 'completed' : (isStepRunning ? 'running' : 'completed')
+                                },
+                                position: { x: colX.tool, y: layerY[3] }
+                            });
+
+                            edgesList.push({
+                                id: `edge-${workerNodeId}-${stepNodeId}`,
+                                source: workerNodeId,
+                                target: stepNodeId,
+                                animated: isStepRunning,
+                                style: {
+                                    stroke: step.output ? '#39ff14' : '#ff5e00',
+                                    strokeWidth: 1.5,
+                                    filter: step.output ? 'drop-shadow(0 0 3px #39ff14)' : 'drop-shadow(0 0 3px #ff5e00)'
+                                }
+                            });
+
+                            lastToolNodeId = stepNodeId;
+                            layerY[3] += 180;
+                        }
                     });
 
                     lastNodeId = lastToolNodeId || workerNodeId;
@@ -339,14 +418,14 @@ export function VisualFlow({
                     const isValRunning = currentActiveStep.state === 'VALIDATING';
                     const isBlocked = currentActiveStep.state === 'BLOCKED' || currentActiveStep.state === 'FAILED';
 
-                    nodesList.push({
+                    addNode({
                         id: valNodeId,
                         type: 'cyberValidator',
                         data: {
                             name: "Quality Validator",
                             state: isValRunning ? 'validating' : isBlocked ? 'blocked' : 'passed'
                         },
-                        position: { x: 1050, y: layerY[4] }
+                        position: { x: colX.validator, y: layerY[4] }
                     });
 
                     edgesList.push({
@@ -374,8 +453,6 @@ export function VisualFlow({
     return (
         <div className="flex-1 flex flex-col h-full bg-zinc-950 text-zinc-100 overflow-hidden relative select-none" style={{ height: '100%', minHeight: '500px' }}>
 
-            {/* 🌌 STYLED RETRO TERMINAL SCANLINES */}
-
             {/* REACTFLOW MAIN CANVAS */}
             <div className="flex-1 h-full w-full relative" style={{ height: '100%' }}>
                 <ReactFlow
@@ -402,6 +479,31 @@ export function VisualFlow({
                         className="bg-zinc-900/90 border border-zinc-800"
                     />
                 </ReactFlow>
+
+                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL */}
+                {lastAssistantMessage && (
+                    <div className="absolute top-4 right-4 z-40 flex flex-col items-end pointer-events-none select-none">
+                        <button
+                            type="button"
+                            onClick={() => setShowResponsePanel(!showResponsePanel)}
+                            className="bg-zinc-900 border border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white rounded-lg p-2 text-xs font-semibold cursor-pointer shadow-lg flex items-center gap-1.5 pointer-events-auto"
+                        >
+                            <span>{showResponsePanel ? '👉' : '👈'}</span> AI Output Panel
+                        </button>
+
+                        {showResponsePanel && (
+                            <div className="mt-2 bg-zinc-950/95 border border-zinc-800 text-zinc-200 rounded-xl shadow-2xl p-4 overflow-y-auto max-h-[50vh] w-80 md:w-[420px] backdrop-blur-md text-left pointer-events-auto select-text scrollbar-thin">
+                                <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest font-mono mb-2 pb-1.5 border-b border-zinc-800">
+                                    🤖 Latest Assistant Output
+                                </h3>
+                                <div
+                                    className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                    dangerouslySetInnerHTML={{ __html: lastAssistantContentHtml }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* FLOATING RETRO DECK CHAT OVERLAY */}
                 <div className="absolute bottom-4 left-4 right-4 z-50 max-w-4xl mx-auto select-none pointer-events-auto">
@@ -511,8 +613,11 @@ export function VisualFlow({
                                     <div className="space-y-4">
                                         <div className="space-y-1">
                                             <div className="text-xs font-bold text-cyan-500 select-none font-mono">💬 PROMPT CONTENT:</div>
-                                            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-sans font-medium text-zinc-200 select-text leading-relaxed whitespace-pre-wrap">
-                                                {selectedNode.data.content}
+                                            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+                                                <div
+                                                    className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                                    dangerouslySetInnerHTML={{ __html: inspectorHtml }}
+                                                />
                                             </div>
                                         </div>
                                         {selectedNode.data.images && selectedNode.data.images.length > 0 && (
@@ -539,8 +644,11 @@ export function VisualFlow({
                                         {selectedNode.data.content && (
                                             <div className="space-y-1">
                                                 <div className="text-xs font-bold text-amber-500 select-none font-mono">🧠 THOUGHT PROCESS / RESPONSE:</div>
-                                                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-sans text-zinc-200 select-text leading-relaxed whitespace-pre-wrap">
-                                                    {selectedNode.data.content}
+                                                <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+                                                    <div
+                                                        className="markdown-body-dark text-[14px] leading-relaxed select-text"
+                                                        dangerouslySetInnerHTML={{ __html: inspectorHtml }}
+                                                    />
                                                 </div>
                                             </div>
                                         )}

@@ -3,7 +3,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ExecutionStep {
   id: string;
-  type: 'thinking' | 'terminal' | 'read_file' | 'search' | 'generic';
+  // Bổ sung thêm kiểu 'agent' vào cuối danh sách các kiểu hợp lệ
+  type: 'thinking' | 'terminal' | 'read_file' | 'search' | 'generic' | 'agent';
   title: string;
   input?: string;
   output?: string;
