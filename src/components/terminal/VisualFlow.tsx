@@ -18,7 +18,7 @@ import { ChatInputForm } from "./ChatInputForm";
 import { WorkspaceData } from "../../App";
 import { AnimatePresence } from "motion/react";
 import { marked } from "marked";
-
+import { StructuredQuestionsForm } from "./StructuredQuestionsForm";
 // =================================================================
 // 🌌 CUSTOM MULTI-THEME NEON NODES COMPONENTS FOR REACTFLOW
 // =================================================================
@@ -880,41 +880,71 @@ export function VisualFlow({
             </div>
 
             {/* STRUCTURED PERMISSION HITL OVERLAY */}
-            {pendingPermission && (
-                <div className="absolute top-4 left-4 right-4 z-50 max-w-md mx-auto p-4 bg-zinc-900 border border-amber-500 rounded-xl space-y-3 shadow-[0_0_20px_rgba(245,158,11,0.2)] text-left select-text">
-                    <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[11px] font-mono">
-                        <span className="animate-pulse">⚠️</span> hitl approval required
+            {pendingPermission && (() => {
+                let structuredQuestions = null;
+                if (pendingPermission.details && pendingPermission.details.trim().startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(pendingPermission.details);
+                        if (parsed.type === 'structured_questions') {
+                            structuredQuestions = parsed;
+                        }
+                    } catch { }
+                }
+
+                // Nếu phát hiện dữ liệu là Structured Questions, dựng giao diện wizard trực quan
+                if (structuredQuestions) {
+                    return (
+                        <div className="absolute top-4 left-4 right-4 z-50 max-w-md mx-auto p-4 bg-white border border-zinc-200 rounded-xl space-y-3 shadow-xl text-left relative overflow-hidden text-zinc-800">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-amber-500" />
+                            <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[11px] font-mono select-none">
+                                <span className="animate-pulse">❓</span> YÊU CẦU LÀM RÕ THÔNG TIN (STRUCTURED WIZARD)
+                            </div>
+                            <StructuredQuestionsForm
+                                data={structuredQuestions}
+                                onSubmit={(ans) => respondToPermission(pendingPermission.id, JSON.stringify(ans))}
+                                onCancel={() => respondToPermission(pendingPermission.id, 'n')}
+                            />
+                        </div>
+                    );
+                }
+
+                // Fallback đối với các yêu cầu xác nhận Terminal hoặc Sửa file thông thường
+                return (
+                    <div className="absolute top-4 left-4 right-4 z-50 max-w-md mx-auto p-4 bg-zinc-900 border border-amber-500 rounded-xl space-y-3 shadow-[0_0_20px_rgba(245,158,11,0.2)] text-left select-text">
+                        <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[11px] font-mono">
+                            <span className="animate-pulse">⚠️</span> hitl approval required
+                        </div>
+                        <p className="text-[11px] text-zinc-200 leading-relaxed font-semibold">
+                            {pendingPermission.query}
+                        </p>
+                        {pendingPermission.details && (
+                            <pre className="p-2 bg-black border border-zinc-800 text-[10px] text-zinc-400 font-mono rounded overflow-auto max-h-24 whitespace-pre-wrap">
+                                {pendingPermission.details}
+                            </pre>
+                        )}
+                        <div className="flex gap-1.5 justify-end">
+                            <button
+                                onClick={() => respondToPermission(pendingPermission.id, 'n')}
+                                className="px-2.5 py-1.5 border border-red-500 bg-red-950/20 text-red-500 rounded-lg text-[10px] font-mono font-bold hover:bg-red-500/20 transition-all cursor-pointer"
+                            >
+                                DENY
+                            </button>
+                            <button
+                                onClick={() => respondToPermission(pendingPermission.id, 'y')}
+                                className="px-2.5 py-1.5 border border-blue-500 bg-blue-950/20 text-blue-400 rounded-lg text-[10px] font-mono font-bold hover:bg-blue-50/20 transition-all cursor-pointer"
+                            >
+                                APPROVE (YES)
+                            </button>
+                            <button
+                                onClick={() => respondToPermission(pendingPermission.id, 'a')}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
+                            >
+                                APPROVE ALL
+                            </button>
+                        </div>
                     </div>
-                    <p className="text-[11px] text-zinc-200 leading-relaxed font-semibold">
-                        {pendingPermission.query}
-                    </p>
-                    {pendingPermission.details && (
-                        <pre className="p-2.5 bg-black border border-zinc-800 text-[10px] text-zinc-400 font-mono rounded overflow-auto max-h-24 whitespace-pre-wrap leading-relaxed">
-                            {pendingPermission.details}
-                        </pre>
-                    )}
-                    <div className="flex gap-1.5 justify-end">
-                        <button
-                            onClick={() => respondToPermission(pendingPermission.id, 'n')}
-                            className="px-2.5 py-1.5 border border-red-500 bg-red-950/20 text-red-500 rounded-lg text-[10px] font-mono font-bold hover:bg-red-500/20 transition-all cursor-pointer"
-                        >
-                            DENY
-                        </button>
-                        <button
-                            onClick={() => respondToPermission(pendingPermission.id, 'y')}
-                            className="px-2.5 py-1.5 border border-blue-500 bg-blue-950/20 text-blue-400 rounded-lg text-[10px] font-mono font-bold hover:bg-blue-500/20 transition-all cursor-pointer"
-                        >
-                            APPROVE (YES)
-                        </button>
-                        <button
-                            onClick={() => respondToPermission(pendingPermission.id, 'a')}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
-                        >
-                            APPROVE ALL
-                        </button>
-                    </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Cyberpunk Inspector Panel (LIGHTBOX MODAL WITH DYNAMIC THEMING) */}
             <AnimatePresence>
