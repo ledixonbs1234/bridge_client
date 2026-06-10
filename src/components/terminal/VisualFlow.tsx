@@ -23,6 +23,24 @@ import { marked } from "marked";
 // 🌌 CUSTOM MULTI-THEME NEON NODES COMPONENTS FOR REACTFLOW
 // =================================================================
 
+const CyberGroupNode = ({ data }: any) => {
+    const isDark = data.theme !== 'light';
+    return (
+        <div
+            style={{ width: data.width, height: data.height }}
+            className={`rounded-2xl border pointer-events-none select-none p-3 text-left transition-all duration-200 ${isDark
+                ? 'bg-zinc-950/20 border-zinc-800/40 text-zinc-550'
+                : 'bg-zinc-100/30 border-zinc-200/60 text-zinc-400'
+                }`}
+        >
+            <div className={`absolute top-2.5 left-4 text-[9px] font-bold font-mono uppercase tracking-wider ${isDark ? 'text-zinc-600' : 'text-zinc-400'
+                }`}>
+                {data.label}
+            </div>
+        </div>
+    );
+};
+
 const CyberUserNode = ({ data }: any) => {
     const isDark = data.theme !== 'light';
     const bgClass = isDark
@@ -204,7 +222,8 @@ const nodeTypes = {
     cyberUser: CyberUserNode,
     cyberAgent: CyberAgentNode,
     cyberTool: CyberToolNode,
-    cyberValidator: CyberValidatorNode
+    cyberValidator: CyberValidatorNode,
+    cyberGroup: CyberGroupNode
 };
 
 // =================================================================
@@ -232,6 +251,16 @@ export function VisualFlow({
     const [realProviders, setRealProviders] = useState<any[]>([]);
     const [availableCommands, setAvailableCommands] = useState<any[]>([]);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+
+    // SỬA ĐỔI: Khởi tạo Chế độ lọc xem (Toàn bộ / Chỉ xem lượt hiện hành)
+    const [viewMode, setViewMode] = useState<'full' | 'active'>(() => {
+        try {
+            const saved = localStorage.getItem('bridge_flow_view_mode');
+            return (saved === 'full' || saved === 'active') ? saved : 'full';
+        } catch {
+            return 'full';
+        }
+    });
 
     // Khởi tạo Theme Sáng/Tối và lưu bền vững vào localStorage
     const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -275,6 +304,10 @@ export function VisualFlow({
     useEffect(() => {
         localStorage.setItem('bridge_flow_theme', theme);
     }, [theme]);
+
+    useEffect(() => {
+        localStorage.setItem('bridge_flow_view_mode', viewMode);
+    }, [viewMode]);
 
     useEffect(() => {
         localStorage.setItem('bridge_response_panel_width', panelWidth.toString());
@@ -353,6 +386,48 @@ export function VisualFlow({
         }
     }, [selectedNode]);
 
+    // Lọc danh sách tin nhắn hiển thị tùy chế độ (Toàn bộ / Lượt hiện tại)
+    const filteredMessages = useMemo(() => {
+        if (viewMode === 'full') return messages;
+
+        // Chế độ Focus: Tìm và chỉ trích xuất duy nhất Turn hội thoại cuối cùng
+        const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user');
+        if (lastUserIdx === -1) return messages;
+
+        const actualIdx = messages.length - 1 - lastUserIdx;
+        return messages.slice(actualIdx);
+    }, [messages, viewMode]);
+
+    // Phân rã cấu trúc tin nhắn phẳng thành các "Turn" có cấu trúc
+    const structuredTurns = useMemo(() => {
+        const turns: Array<{ user?: ChatMessage; assistant?: ChatMessage; userIdx?: number; assistantIdx?: number }> = [];
+        let currentTurn: any = {};
+
+        filteredMessages.forEach((msg, idx) => {
+            // Định vị lại chỉ số gốc (index) của tin nhắn trong mảng messages chính thức
+            const originalIndex = messages.indexOf(msg);
+            const actualIndex = originalIndex !== -1 ? originalIndex : idx;
+
+            if (msg.role === 'user') {
+                if (currentTurn.user) {
+                    turns.push(currentTurn);
+                    currentTurn = {};
+                }
+                currentTurn.user = msg;
+                currentTurn.userIdx = actualIndex;
+            } else if (msg.role === 'assistant') {
+                currentTurn.assistant = msg;
+                currentTurn.assistantIdx = actualIndex;
+                turns.push(currentTurn);
+                currentTurn = {};
+            }
+        });
+        if (currentTurn.user || currentTurn.assistant) {
+            turns.push(currentTurn);
+        }
+        return turns;
+    }, [filteredMessages, messages]);
+
     // Xử lý kéo dãn Panel (Resize Handler)
     const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
@@ -418,26 +493,27 @@ export function VisualFlow({
             nodesList.push(node);
         };
 
-        messages.forEach((msg: ChatMessage, msgIdx: number) => {
-            const isLastMessage = msgIdx === messages.length - 1;
-            const isStreaming = isLastMessage && isGenerating;
+        structuredTurns.forEach((turn, tIdx) => {
+            // Ghi nhận toạ độ biên trên (Top Bound) của lượt này
+            const turnStartY = Math.min(layerY[0], layerY[1], layerY[2], layerY[3], layerY[4]);
 
-            // CHỈ VẼ PROMPT DECK NẾU TIN NHẮN ĐÓ LÀ CỦA USER
-            if (msg.role === 'user') {
-                const userNodeId = `user-${msgIdx}`;
+            // 1. RENDER PROMPT DECK CỦA USER
+            if (turn.user) {
+                const userNodeId = `user-${turn.userIdx}`;
                 addNode({
                     id: userNodeId,
                     type: 'cyberUser',
-                    data: { content: msg.content, images: msg.images },
+                    data: { content: turn.user.content, images: turn.user.images },
                     position: { x: colX.user, y: layerY[0] }
                 });
 
-                // Vẽ đường nối tuần tự (Sequence) nối tiếp giữa các phiên hội thoại nếu có
+                // Vẽ đường nối vuông góc tuần tự (Sequence) nối tiếp giữa các phiên hội thoại nếu có
                 if (lastNodeId) {
                     edgesList.push({
                         id: `edge-seq-${lastNodeId}-${userNodeId}`,
                         source: lastNodeId,
                         target: userNodeId,
+                        type: 'smoothstep',
                         animated: false,
                         style: {
                             stroke: theme === 'dark' ? '#00f0ff' : '#0ea5e9',
@@ -453,9 +529,12 @@ export function VisualFlow({
                 layerY[0] += 200;
             }
 
-            // CHỈ DỰNG LUỒNG AGENT VÀ TOOLS NẾU TIN NHẮN LÀ CỦA ASSISTANT
-            if (msg.role === 'assistant') {
-                const orchNodeId = `orchestrator-${msgIdx}`;
+            // 2. RENDER MASTER ORCHESTRATOR & CÁC WORKER AGENT CON
+            if (turn.assistant) {
+                const isLastMessage = turn.assistantIdx === messages.length - 1;
+                const isStreaming = isLastMessage && isGenerating;
+                const orchNodeId = `orchestrator-${turn.assistantIdx}`;
+
                 addNode({
                     id: orchNodeId,
                     type: 'cyberAgent',
@@ -463,8 +542,8 @@ export function VisualFlow({
                         name: "Master Orchestrator",
                         role: "Lead Technical Architect",
                         model: "System Host",
-                        state: isStreaming && (!msg.steps || msg.steps.length === 0) ? 'thinking' : 'completed',
-                        content: msg.content
+                        state: isStreaming && (!turn.assistant.steps || turn.assistant.steps.length === 0) ? 'thinking' : 'completed',
+                        content: turn.assistant.content
                     },
                     position: { x: colX.orchestrator, y: layerY[1] }
                 });
@@ -475,7 +554,8 @@ export function VisualFlow({
                         id: `edge-${latestUserNodeId}-${orchNodeId}`,
                         source: latestUserNodeId,
                         target: orchNodeId,
-                        animated: isStreaming && (!msg.steps || msg.steps.length === 0),
+                        type: 'smoothstep',
+                        animated: isStreaming && (!turn.assistant.steps || turn.assistant.steps.length === 0),
                         style: {
                             stroke: theme === 'dark' ? '#ffb700' : '#d97706',
                             strokeWidth: 2,
@@ -487,8 +567,8 @@ export function VisualFlow({
                 lastNodeId = orchNodeId;
                 layerY[1] += 220;
 
-                if (msg.steps && msg.steps.length > 0) {
-                    const workerNodeId = `worker-${msgIdx}`;
+                if (turn.assistant.steps && turn.assistant.steps.length > 0) {
+                    const workerNodeId = `worker-${turn.assistantIdx}`;
                     addNode({
                         id: workerNodeId,
                         type: 'cyberAgent',
@@ -505,6 +585,7 @@ export function VisualFlow({
                         id: `edge-${orchNodeId}-${workerNodeId}`,
                         source: orchNodeId,
                         target: workerNodeId,
+                        type: 'smoothstep',
                         animated: isStreaming,
                         style: {
                             stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
@@ -515,9 +596,9 @@ export function VisualFlow({
 
                     let lastToolNodeId: string | null = null;
 
-                    msg.steps.forEach((step: ExecutionStep, sIdx: number) => {
-                        const stepNodeId = `step-${step.id || `${msgIdx}-${sIdx}`}`;
-                        const isLastStep = sIdx === msg.steps!.length - 1;
+                    turn.assistant.steps.forEach((step: ExecutionStep, sIdx: number) => {
+                        const stepNodeId = `step-${step.id || `${turn.assistantIdx}-${sIdx}`}`;
+                        const isLastStep = sIdx === turn.assistant!.steps!.length - 1;
                         const isStepRunning = isLastStep && isStreaming && !step.output;
 
                         if (step.type === 'agent') {
@@ -539,6 +620,7 @@ export function VisualFlow({
                                 id: `edge-${workerNodeId}-${stepNodeId}`,
                                 source: workerNodeId,
                                 target: stepNodeId,
+                                type: 'smoothstep',
                                 animated: isStepRunning,
                                 style: {
                                     stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
@@ -550,7 +632,7 @@ export function VisualFlow({
                             lastToolNodeId = stepNodeId;
                             layerY[2] += 220;
                         } else {
-                            // VẼ CÁC SYSTEM ACTION TIÊU CHUẨN
+                            // VẼ CÁC SYSTEM ACTION TIÊU CHUẨN (CÓ SMOOTHSTEP)
                             addNode({
                                 id: stepNodeId,
                                 type: 'cyberTool',
@@ -568,6 +650,7 @@ export function VisualFlow({
                                 id: `edge-${workerNodeId}-${stepNodeId}`,
                                 source: workerNodeId,
                                 target: stepNodeId,
+                                type: 'smoothstep',
                                 animated: isStepRunning,
                                 style: {
                                     stroke: step.output
@@ -593,7 +676,7 @@ export function VisualFlow({
                 const currentActiveStep = currentStepMap.find(s => s.step_key === runningStepKey);
 
                 if (isPipelineStepActive && isLastMessage && currentActiveStep) {
-                    const valNodeId = `validator-${msgIdx}`;
+                    const valNodeId = `validator-${turn.assistantIdx}`;
                     const isValRunning = currentActiveStep.state === 'VALIDATING';
                     const isBlocked = currentActiveStep.state === 'BLOCKED' || currentActiveStep.state === 'FAILED';
 
@@ -611,6 +694,7 @@ export function VisualFlow({
                         id: `edge-${lastNodeId}-${valNodeId}`,
                         source: lastNodeId!,
                         target: valNodeId,
+                        type: 'smoothstep',
                         animated: isValRunning,
                         style: {
                             stroke: isValRunning
@@ -629,11 +713,43 @@ export function VisualFlow({
                     layerY[4] += 180;
                 }
             }
+
+            // Ghi nhận toạ độ biên dưới (Bottom Bound) và vẽ hộp nhóm cho lượt hội thoại này
+            const turnEndY = Math.max(layerY[0], layerY[1], layerY[2], layerY[3], layerY[4]);
+            const turnHeight = turnEndY - turnStartY;
+
+            // Chèn node group vào đầu danh sách để làm hình nền nằm dưới
+            const displayIdx = messages.indexOf(turn.user || turn.assistant || {} as ChatMessage);
+            const turnNumber = displayIdx !== -1 ? Math.floor(displayIdx / 2) + 1 : tIdx + 1;
+            const turnLabel = turn.user
+                ? `Lượt #${turnNumber}: "${turn.user.content.substring(0, 45)}${turn.user.content.length > 45 ? '...' : ''}"`
+                : `Lượt #${turnNumber}`;
+
+            nodesList.unshift({
+                id: `group-${tIdx}`,
+                type: 'cyberGroup',
+                data: {
+                    label: turnLabel,
+                    width: 1540,
+                    height: turnHeight + 40,
+                    theme
+                },
+                position: { x: 20, y: turnStartY - 20 },
+                style: { pointerEvents: 'none', zIndex: -1 }
+            });
+
+            // Tự động dịch chuyển dòng biên để lượt hội thoại sau nằm bên dưới lượt trước
+            const nextTurnGap = 80;
+            layerY[0] = turnEndY + nextTurnGap;
+            layerY[1] = turnEndY + nextTurnGap;
+            layerY[2] = turnEndY + nextTurnGap;
+            layerY[3] = turnEndY + nextTurnGap;
+            layerY[4] = turnEndY + nextTurnGap;
         });
 
         setNodes(nodesList as any);
         setEdges(edgesList as any);
-    }, [messages, isGenerating, activeModel, workspaceData, setNodes, setEdges, theme]);
+    }, [messages, isGenerating, activeModel, workspaceData, setNodes, setEdges, theme, viewMode, structuredTurns]);
 
     return (
         <div className={`flex-1 flex flex-col h-full overflow-hidden relative select-none transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-100 text-zinc-800'}`} style={{ height: '100%', minHeight: '500px' }}>
@@ -666,18 +782,30 @@ export function VisualFlow({
                     />
                 </ReactFlow>
 
-                {/* 🌗 FLOATING THEME TOGGLE CONTROL */}
+                {/* 🌗 FLOATING THEME TOGGLE & VIEW MODE CONTROL PANEL */}
                 <div className="absolute top-4 left-4 z-40 flex gap-2 pointer-events-auto select-none">
                     <button
                         type="button"
                         onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
                         className={`border rounded-lg p-2 text-xs font-bold cursor-pointer shadow-lg flex items-center gap-1.5 transition-all duration-200 ${theme === 'dark'
-                                ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
-                                : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                            ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
+                            : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                             }`}
                         title="Chuyển đổi giao diện Sáng / Tối"
                     >
                         <span>{theme === 'dark' ? '☀️' : '🌙'}</span> {theme === 'dark' ? 'Sáng' : 'Tối'}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setViewMode(prev => prev === 'full' ? 'active' : 'full')}
+                        className={`border rounded-lg p-2 text-xs font-bold cursor-pointer shadow-lg flex items-center gap-1.5 transition-all duration-200 ${theme === 'dark'
+                            ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
+                            : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                            }`}
+                        title="Tập trung lượt hội thoại hiện tại / Xem toàn bộ"
+                    >
+                        <span>{viewMode === 'full' ? '👁️' : '🎯'}</span> {viewMode === 'full' ? 'Xem toàn bộ' : 'Chỉ lượt hiện tại'}
                     </button>
                 </div>
 
@@ -688,8 +816,8 @@ export function VisualFlow({
                             type="button"
                             onClick={() => setShowResponsePanel(!showResponsePanel)}
                             className={`border text-xs font-semibold cursor-pointer shadow-lg flex items-center gap-1.5 pointer-events-auto rounded-lg p-2 transition-colors ${theme === 'dark'
-                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
-                                    : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+                                ? 'bg-zinc-900 border-zinc-800 text-zinc-100 hover:bg-zinc-800 hover:text-white'
+                                : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                                 }`}
                         >
                             <span>{showResponsePanel ? '👉' : '👈'}</span> AI Output Panel
@@ -699,8 +827,8 @@ export function VisualFlow({
                             <div
                                 style={{ width: `${panelWidth}px`, height: `${panelHeight}px` }}
                                 className={`mt-2 border rounded-xl shadow-2xl p-4 backdrop-blur-md text-left pointer-events-auto select-text relative flex flex-col transition-colors ${theme === 'dark'
-                                        ? 'bg-zinc-950/95 border-zinc-800 text-zinc-200'
-                                        : 'bg-white/95 border-zinc-200 text-zinc-800'
+                                    ? 'bg-zinc-950/95 border-zinc-800 text-zinc-200'
+                                    : 'bg-white/95 border-zinc-200 text-zinc-800'
                                     }`}
                             >
                                 <h3 className={`text-[10px] font-bold uppercase tracking-widest font-mono mb-2 pb-1.5 border-b select-none ${theme === 'dark' ? 'text-cyan-400 border-zinc-800' : 'text-cyan-600 border-zinc-200'
@@ -800,8 +928,8 @@ export function VisualFlow({
                     >
                         <div
                             className={`border rounded-2xl w-full max-w-3xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col relative transition-all duration-200 ${theme === 'dark'
-                                    ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
-                                    : 'bg-white border-zinc-200 text-zinc-800 shadow-2xl'
+                                ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+                                : 'bg-white border-zinc-200 text-zinc-800 shadow-2xl'
                                 }`}
                             style={{
                                 animation: 'zoomIn 0.2s ease-out',
@@ -824,8 +952,8 @@ export function VisualFlow({
                                 <button
                                     onClick={() => setSelectedNode(null)}
                                     className={`px-3.5 py-1.5 border rounded-lg text-xs font-mono font-bold cursor-pointer transition-colors ${theme === 'dark'
-                                            ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white'
-                                            : 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 hover:text-zinc-900'
+                                        ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white'
+                                        : 'bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 hover:text-zinc-900'
                                         }`}
                                 >
                                     CLOSE [Esc]
@@ -840,8 +968,8 @@ export function VisualFlow({
                                     <div>
                                         <h4 className="text-[10px] uppercase font-mono font-bold text-zinc-500 tracking-wider mb-0.5">Node Type</h4>
                                         <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border transition-colors ${theme === 'dark'
-                                                ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                                : 'bg-zinc-100 border-zinc-200 text-zinc-700'
+                                            ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                            : 'bg-zinc-100 border-zinc-200 text-zinc-700'
                                             }`}>
                                             {selectedNode.type}
                                         </span>
@@ -928,8 +1056,8 @@ export function VisualFlow({
                                                                 type="button"
                                                                 onClick={() => onViewDiff && onViewDiff(parsed.file_path)}
                                                                 className={`border px-2 py-0.5 rounded font-mono text-xs cursor-pointer select-text transition-colors ${theme === 'dark'
-                                                                        ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-blue-400'
-                                                                        : 'bg-zinc-100 border-zinc-200 hover:bg-zinc-200 text-blue-600'
+                                                                    ? 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-blue-400'
+                                                                    : 'bg-zinc-100 border-zinc-200 hover:bg-zinc-200 text-blue-600'
                                                                     }`}
                                                             >
                                                                 📄 {parsed.file_path} (Xem thay đổi 🔍)
@@ -939,8 +1067,8 @@ export function VisualFlow({
                                                             <div className="space-y-1">
                                                                 <div className="text-[10px] font-bold text-rose-500 select-none">❌ TARGET CONTENT (DELETED):</div>
                                                                 <pre className={`p-3 border rounded text-xs font-mono max-h-32 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
-                                                                        ? 'bg-red-950/20 border-red-900/40 text-rose-300'
-                                                                        : 'bg-red-50 border-red-200 text-red-800'
+                                                                    ? 'bg-red-950/20 border-red-900/40 text-rose-300'
+                                                                    : 'bg-red-50 border-red-200 text-red-800'
                                                                     }`}>
                                                                     {parsed.target_content}
                                                                 </pre>
@@ -948,8 +1076,8 @@ export function VisualFlow({
                                                             <div className="space-y-1">
                                                                 <div className="text-[10px] font-bold text-emerald-500 select-none">✅ REPLACEMENT CONTENT (ADDED):</div>
                                                                 <pre className={`p-3 border rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
-                                                                        ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
-                                                                        : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                                    ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
+                                                                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                                                                     }`}>
                                                                     {parsed.replacement_content}
                                                                 </pre>
@@ -971,8 +1099,8 @@ export function VisualFlow({
                                                         <div className="space-y-1">
                                                             <div className="text-[10px] font-bold text-teal-400 select-none">📝 FILE CONTENT:</div>
                                                             <pre className={`p-3 border rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
-                                                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                                                    : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                                                                ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                                : 'bg-zinc-50 border-zinc-200 text-zinc-800'
                                                                 }`}>
                                                                 {content}
                                                             </pre>
@@ -987,8 +1115,8 @@ export function VisualFlow({
                                             <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
                                                 <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>⚙️ INPUT ARGUMENTS:</div>
                                                 <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap select-text leading-relaxed transition-colors ${theme === 'dark'
-                                                        ? 'bg-zinc-900 border-zinc-800 text-blue-400'
-                                                        : 'bg-zinc-50 border-zinc-200 text-blue-600'
+                                                    ? 'bg-zinc-900 border-zinc-800 text-blue-400'
+                                                    : 'bg-zinc-50 border-zinc-200 text-blue-600'
                                                     }`}>
                                                     {selectedNode.data.input}
                                                 </pre>
@@ -1000,8 +1128,8 @@ export function VisualFlow({
                                             <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
                                                 <div className="text-xs font-bold select-none font-mono text-emerald-500">⚙️ OUTPUT RESPONSE:</div>
                                                 <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto max-h-52 whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
-                                                        ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                                        : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                    : 'bg-zinc-50 border-zinc-200 text-zinc-800'
                                                     }`}>
                                                     {(() => {
                                                         try {
