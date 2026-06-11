@@ -1,12 +1,12 @@
-// filepath: ridge_client/src/components/WebTerminal.tsx
+// filepath: bridge_client/src/components/WebTerminal.tsx
 import * as React from "react";
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useSSE, ChatMessage, TimelineItem } from "@/hooks/useSSE";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useSSE, ChatMessage, TimelineItem } from "../hooks/useSSE";
 import { Button } from "./animate-ui/button";
 import { AnimatePresence } from "motion/react";
 import { WorkspaceData } from "../App";
 
-// Import các sub-component chuyên biệt đã được phân tách
+// Import các sub-component chuyên biệt từ thư mục con terminal/
 import { StructuredQuestionsForm } from "./terminal/StructuredQuestionsForm";
 import { TimelineTextBlock } from "./terminal/TimelineTextBlock";
 import { CollapsibleSteps } from "./terminal/CollapsibleSteps";
@@ -22,6 +22,46 @@ interface CommandInfo {
   alias: string | null;
   desc: string;
   category: string;
+}
+
+// Khai báo giao diện kiểu dữ liệu tường minh để giải quyết lỗi implicit 'any' và 'Cannot find name'
+interface PipelineStep {
+  step_key: string;
+  task: string;
+  tool: string;
+  parallel_group: string | null;
+  depends_on: string[];
+}
+
+interface PipelineStage {
+  name: string;
+  status: string;
+  steps: PipelineStep[];
+}
+
+interface AgentItem {
+  id: string;
+  name: string;
+  type: string;
+  provider: string;
+  model: string;
+  tools: string[];
+  toolCalls: any[];
+  status: {
+    state: "idle" | "running" | "waiting" | "thinking";
+    currentTask?: string;
+    progress: number;
+    lastUpdate: number;
+  };
+}
+
+interface StateRowItem {
+  step_key: string;
+  state: "PENDING" | "QUEUED" | "RUNNING" | "VALIDATING" | "DONE" | "FAILED" | "BLOCKED";
+  retry_count: number;
+  error_history: string;
+  updated_at: string;
+  summary?: string;
 }
 
 interface WebTerminalProps {
@@ -65,6 +105,13 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
   const [realProviders, setRealProviders] = useState<ProviderInfo[]>([]);
   const [availableCommands, setAvailableCommands] = useState<CommandInfo[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const handleCopyUserMsg = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 1500);
+  };
 
   const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setLogs } = sse;
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -158,7 +205,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
 
     if (!isGenerating && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
-      if (lastMsg.role === 'assistant' && lastMsg.content !== lastValidatedMessageRef.current) {
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content !== lastValidatedMessageRef.current) {
         lastValidatedMessageRef.current = lastMsg.content;
 
         const regex = /```mermaid\n([\s\S]*?)```/g;
@@ -170,7 +217,7 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
 
         if (blocks.length > 0) {
           const validateAll = async () => {
-            const { default: mermaidInst } = await import('mermaid');
+            const mermaidInst = (await import('mermaid')).default as any;
             for (let i = 0; i < blocks.length; i++) {
               const block = blocks[i];
               try {
@@ -233,7 +280,6 @@ ${block}
     mode: 'default' | 'thinking' | 'fast'
   ) => {
     shouldAutoScrollRef.current = true;
-    // SỬA ĐỔI: Chuyển tiếp tham số mode sang hàm sendPrompt của SSE Hook
     sendPrompt(prompt, useReformulate, pastedImages, activeAgent, activeModel, useHeadless, mode);
   }, [sendPrompt, activeAgent, activeModel]);
 
@@ -344,7 +390,6 @@ ${block}
                           return null;
                         })}
 
-                        {/* KHU VỰC HIỂN THỊ TOKEN REAL-TIME */}
                         {msg.usage && (
                           <div className="text-[10px] text-zinc-400 font-mono px-1 flex items-center gap-1.5 select-none self-start">
                             <span>📊 Token Usage:</span>
@@ -358,11 +403,31 @@ ${block}
                       </div>
                     ) : (
                       <div
-                        className={`p-3 rounded-xl ${msg.role === 'user'
+                        className={`p-3 rounded-xl relative group/user ${msg.role === 'user'
                           ? 'bg-zinc-100 border border-zinc-200 text-zinc-900 shadow-xs self-end rounded-tr-xs'
                           : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm self-start rounded-tl-xs w-full'
                           }`}
                       >
+                        {msg.role === 'user' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyUserMsg(msg.content, idx);
+                            }}
+                            className="absolute -top-2 -left-2 opacity-0 group-hover/user:opacity-100 transition-opacity bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-500 hover:text-zinc-800 rounded-md p-1.5 shadow-xs cursor-pointer z-10 flex items-center justify-center"
+                            title="Sao chép câu hỏi"
+                          >
+                            {copiedIndex === idx ? (
+                              <span className="text-[9px] text-emerald-600 font-bold px-0.5">✓</span>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
                         <TimelineTextBlock content={msg.content} />
                       </div>
                     )}
@@ -397,7 +462,7 @@ ${block}
                     </div>
                     <StructuredQuestionsForm
                       data={structuredQuestions}
-                      onSubmit={(ans) => respondToPermission(pendingPermission.id, JSON.stringify(ans))}
+                      onSubmit={(ans: Record<string, any>) => respondToPermission(pendingPermission.id, JSON.stringify(ans))}
                       onCancel={() => respondToPermission(pendingPermission.id, 'n')}
                     />
                   </>
@@ -421,7 +486,7 @@ ${block}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-red-600 border-red-200 hover:bg-red-50 text-[9px] h-7 px-2 cursor-pointer"
+                      className="text-red-655 border-red-200 hover:bg-red-50 text-[9px] h-7 px-2 cursor-pointer"
                       onClick={() => respondToPermission(pendingPermission.id, 'n')}
                     >
                       Từ chối
@@ -482,7 +547,7 @@ ${block}
                   </div>
 
                   <div className="space-y-3 pt-1">
-                    {activePipeline.stages.map((stage, sIdx) => {
+                    {activePipeline.stages.map((stage: PipelineStage, sIdx: number) => {
                       const runningInStage = stage.steps.some(st => st.step_key === runningStepKey);
                       return (
                         <div key={sIdx} className="space-y-1.5">
@@ -497,12 +562,12 @@ ${block}
                           </div>
 
                           <div className="space-y-1 pl-1.5 border-l border-zinc-200 ml-1">
-                            {stage.steps.map((step) => {
-                              const stateRow = currentStepMap.find(s => s.step_key === step.step_key);
+                            {stage.steps.map((step: PipelineStep) => {
+                              const stateRow = currentStepMap.find((s: StateRowItem) => s.step_key === step.step_key);
                               const stepState = stateRow ? stateRow.state : 'PENDING';
                               const isRunning = step.step_key === runningStepKey;
 
-                              const statusColors = {
+                              const statusColors: Record<string, string> = {
                                 PENDING: 'text-zinc-400',
                                 QUEUED: 'text-zinc-500 font-medium',
                                 RUNNING: 'text-amber-600 font-bold',
@@ -544,7 +609,7 @@ ${block}
                   </div>
 
                   <div className="space-y-3">
-                    {workspaceData?.agents.map((agent) => {
+                    {workspaceData?.agents.map((agent: AgentItem) => {
                       const state = agent.status.state;
                       const isBusy = state === 'running' || state === 'thinking';
 
@@ -556,7 +621,7 @@ ${block}
                             : 'bg-white border-zinc-200 hover:bg-zinc-50'
                             }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
+                          <div className="flex wins-center justify-between mb-1">
                             <div className="flex items-center gap-1 min-w-0">
                               <span className="text-xs shrink-0">
                                 {agent.type === 'orchestrator' ? '👑' : agent.id === 'critic' ? '⚖️' : agent.id === 'validator' ? '🛡️' : '⚙️'}

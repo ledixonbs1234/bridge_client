@@ -5,218 +5,29 @@ import ReactFlow, {
     Background,
     Controls,
     MiniMap,
-    Handle,
-    Position,
     Node,
-    Edge,
     useNodesState,
-    useEdgesState
+    useEdgesState,
+    ReactFlowProvider,
+    useReactFlow
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { useSSE, ChatMessage, ExecutionStep } from "../../hooks/useSSE";
+import { useSSE, ChatMessage } from "../../hooks/useSSE";
 import { ChatInputForm } from "./ChatInputForm";
 import { WorkspaceData } from "../../App";
 import { AnimatePresence } from "motion/react";
 import { marked } from "marked";
 import { StructuredQuestionsForm } from "./StructuredQuestionsForm";
-// =================================================================
-// 🌌 CUSTOM MULTI-THEME NEON NODES COMPONENTS FOR REACTFLOW
-// =================================================================
+import { TimelineTextBlock } from "./TimelineTextBlock";
 
-const CyberGroupNode = ({ data }: any) => {
-    const isDark = data.theme !== 'light';
-    return (
-        <div
-            style={{ width: data.width, height: data.height }}
-            className={`rounded-2xl border pointer-events-none select-none p-3 text-left transition-all duration-200 ${isDark
-                ? 'bg-zinc-950/20 border-zinc-800/40 text-zinc-550'
-                : 'bg-zinc-100/30 border-zinc-200/60 text-zinc-400'
-                }`}
-        >
-            <div className={`absolute top-2.5 left-4 text-[9px] font-bold font-mono uppercase tracking-wider ${isDark ? 'text-zinc-600' : 'text-zinc-400'
-                }`}>
-                {data.label}
-            </div>
-        </div>
-    );
-};
-
-const CyberUserNode = ({ data }: any) => {
-    const isDark = data.theme !== 'light';
-    const bgClass = isDark
-        ? "bg-zinc-950/90 text-cyan-400 border-cyan-400 glow-neon-cyan"
-        : "bg-white/95 text-cyan-600 border-cyan-400 shadow-md";
-    const contentColor = isDark ? "text-zinc-300" : "text-zinc-700";
-
-    return (
-        <div className={`px-4 py-3 rounded-xl border text-xs font-mono font-bold relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${bgClass}`}>
-            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black ${isDark ? "text-cyan-500" : "text-cyan-600"}`}>User Input</div>
-            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${isDark ? "border-cyan-500/20" : "border-cyan-200"}`}>
-                <span>💬</span> PROMPT DECK
-            </div>
-            <div className={`text-[11px] font-semibold line-clamp-3 select-text whitespace-pre-wrap leading-relaxed ${contentColor}`}>
-                {data.content}
-            </div>
-            {data.images && data.images.length > 0 && (
-                <div className="mt-1.5 flex gap-1 select-none">
-                    {data.images.map((img: string, idx: number) => (
-                        <img key={idx} src={img} className={`w-8 h-8 rounded border object-cover ${isDark ? "border-cyan-400/30" : "border-cyan-300"}`} alt="pasted" />
-                    ))}
-                </div>
-            )}
-            <Handle type="source" position={Position.Right} style={{ background: isDark ? '#00f0ff' : '#0ea5e9', borderColor: isDark ? '#00f0ff' : '#0ea5e9', width: '8px', height: '8px' }} />
-        </div>
-    );
-};
-
-const CyberAgentNode = ({ data }: any) => {
-    const isDark = data.theme !== 'light';
-    const isOrchestrator = data.name.includes("Orchestrator");
-
-    let glowClass = "";
-    if (isDark) {
-        glowClass = isOrchestrator
-            ? "glow-neon-yellow border-amber-400 text-amber-400 bg-zinc-950/90"
-            : "glow-neon-magenta border-purple-400 text-purple-400 bg-zinc-950/90";
-    } else {
-        glowClass = isOrchestrator
-            ? "border-amber-500 text-amber-600 bg-white/95 shadow-md"
-            : "border-purple-500 text-purple-600 bg-white/95 shadow-md";
-    }
-
-    const stateColor = data.state === "running" || data.state === "thinking"
-        ? "text-amber-500 animate-pulse font-bold"
-        : "text-emerald-500 font-bold";
-
-    const labelColor = isDark ? "text-zinc-400" : "text-zinc-600";
-    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
-
-    return (
-        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${glowClass}`}>
-            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
-                {isOrchestrator ? "Master Agent" : "Worker Agent"}
-            </div>
-            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
-                <span>{isOrchestrator ? "👑" : "🤖"}</span> {data.name}
-            </div>
-            <div className="space-y-1">
-                <div className={`text-[10px] font-medium leading-normal ${labelColor}`}>
-                    <span className={`${isDark ? "text-zinc-500" : "text-zinc-400"} font-semibold`}>Role:</span> {data.role}
-                </div>
-                <div className={`text-[10px] font-medium ${labelColor}`}>
-                    <span className={`${isDark ? "text-zinc-500" : "text-zinc-400"} font-semibold`}>Model:</span> <span className="font-bold" style={{ color: isDark ? '#60a5fa' : '#2563eb' }}>{data.model}</span>
-                </div>
-                <div className={`text-[9px] mt-1 pt-1 border-t flex justify-between select-none ${borderLineColor}`}>
-                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Status:</span>
-                    <span className={stateColor}>{data.state?.toUpperCase()}</span>
-                </div>
-            </div>
-            <Handle type="target" position={Position.Left} style={{ background: isOrchestrator ? '#ffb700' : '#ff007f', width: '8px', height: '8px' }} />
-            <Handle type="source" position={Position.Right} style={{ background: isOrchestrator ? '#ffb700' : '#ff007f', width: '8px', height: '8px' }} />
-        </div>
-    );
-};
-
-const CyberToolNode = ({ data }: any) => {
-    const isDark = data.theme !== 'light';
-    const isFailed = data.state === "failed";
-
-    let borderGlowClass = "";
-    if (isDark) {
-        borderGlowClass = isFailed
-            ? "glow-neon-magenta border-red-500 text-red-500 bg-zinc-950/90"
-            : data.state === "completed"
-                ? "glow-neon-green border-emerald-400 text-emerald-400 bg-zinc-950/90"
-                : "glow-neon-orange border-orange-400 text-orange-400 bg-zinc-950/90";
-    } else {
-        borderGlowClass = isFailed
-            ? "border-red-500 text-red-600 bg-white/95 shadow-md"
-            : data.state === "completed"
-                ? "border-emerald-500 text-emerald-600 bg-white/95 shadow-md"
-                : "border-orange-500 text-orange-600 bg-white/95 shadow-md";
-    }
-
-    const stateColor = isFailed
-        ? "text-red-500 font-bold"
-        : data.state === "completed"
-            ? "text-emerald-500 font-bold"
-            : "text-orange-500 animate-pulse font-bold";
-
-    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
-    const labelColor = isDark ? "text-zinc-400" : "text-zinc-600";
-
-    return (
-        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${borderGlowClass}`}>
-            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
-                System Action
-            </div>
-            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
-                <span>⚙️</span> TOOL EXECUTION
-            </div>
-            <div className="space-y-1">
-                <div className={`text-[11px] font-bold truncate font-mono ${isDark ? "text-zinc-100" : "text-zinc-800"}`}>
-                    {data.tool}
-                </div>
-                <div className={`text-[10px] font-medium line-clamp-1 truncate select-text ${labelColor}`} title={data.title}>
-                    {data.title}
-                </div>
-                <div className={`text-[9px] mt-1 pt-1 border-t flex justify-between select-none ${borderLineColor}`}>
-                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Status:</span>
-                    <span className={stateColor}>{data.state?.toUpperCase()}</span>
-                </div>
-            </div>
-            <Handle type="target" position={Position.Left} style={{ background: '#ff5e00', width: '8px', height: '8px' }} />
-            <Handle type="source" position={Position.Right} style={{ background: '#ff5e00', width: '8px', height: '8px' }} />
-        </div>
-    );
-};
-
-const CyberValidatorNode = ({ data }: any) => {
-    const isDark = data.theme !== 'light';
-    const isFailed = data.state === "failed" || data.state === "blocked";
-
-    let borderGlowClass = "";
-    if (isDark) {
-        borderGlowClass = isFailed
-            ? "glow-neon-magenta border-red-500 text-red-500 bg-zinc-950/90"
-            : data.state === "passed"
-                ? "glow-neon-green border-emerald-400 text-emerald-400 bg-zinc-950/90"
-                : "glow-neon-cyan border-cyan-400 text-cyan-400 bg-zinc-950/90";
-    } else {
-        borderGlowClass = isFailed
-            ? "border-red-500 text-red-600 bg-white/95 shadow-md"
-            : data.state === "passed"
-                ? "border-emerald-500 text-emerald-600 bg-white/95 shadow-md"
-                : "border-cyan-500 text-cyan-600 bg-white/95 shadow-md";
-    }
-
-    const stateColor = isFailed
-        ? "text-red-500 font-bold animate-pulse"
-        : data.state === "passed"
-            ? "text-emerald-500 font-bold"
-            : "text-cyan-500 animate-pulse font-bold";
-
-    const borderLineColor = isDark ? "border-zinc-800" : "border-zinc-200";
-
-    return (
-        <div className={`px-4 py-3 rounded-xl border text-xs font-mono shadow-lg relative min-w-[200px] max-w-[260px] text-left transition-all duration-200 ${borderGlowClass}`}>
-            <div className={`absolute top-0.5 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-80 ${isDark ? "" : "text-zinc-500"}`}>
-                Strict Quality Gate
-            </div>
-            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none ${borderLineColor}`}>
-                <span>🛡️</span> {data.name}
-            </div>
-            <div className="space-y-1">
-                <div className={`text-[9px] mt-1 pt-1 flex justify-between select-none ${borderLineColor}`}>
-                    <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Verdict:</span>
-                    <span className={stateColor}>{data.state?.toUpperCase()}</span>
-                </div>
-            </div>
-            <Handle type="target" position={Position.Left} style={{ background: '#ff007f', width: '8px', height: '8px' }} />
-            <Handle type="source" position={Position.Right} style={{ background: '#ff007f', width: '8px', height: '8px' }} />
-        </div>
-    );
-};
+// Nhập khẩu các Custom Nodes từ thư mục nodes/
+import {
+    CyberGroupNode,
+    CyberUserNode,
+    CyberAgentNode,
+    CyberToolNode,
+    CyberValidatorNode
+} from "../nodes";
 
 const nodeTypes = {
     cyberUser: CyberUserNode,
@@ -226,9 +37,6 @@ const nodeTypes = {
     cyberGroup: CyberGroupNode
 };
 
-// =================================================================
-// 🚀 MAIN VISUALFLOW COMPONENT (TAB PANEL)
-// =================================================================
 interface VisualFlowProps {
     activeAgent: "MaxHermes" | "MaxClaw";
     activeModel: string;
@@ -238,7 +46,15 @@ interface VisualFlowProps {
     onViewDiff?: (filePath: string) => void;
 }
 
-export function VisualFlow({
+export function VisualFlow(props: VisualFlowProps) {
+    return (
+        <ReactFlowProvider>
+            <VisualFlowInner {...props} />
+        </ReactFlowProvider>
+    );
+}
+
+function VisualFlowInner({
     activeAgent,
     activeModel,
     setActiveModel,
@@ -252,7 +68,9 @@ export function VisualFlow({
     const [availableCommands, setAvailableCommands] = useState<any[]>([]);
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
-    // SỬA ĐỔI: Khởi tạo Chế độ lọc xem (Toàn bộ / Chỉ xem lượt hiện hành)
+    const { fitView, setCenter, getZoom } = useReactFlow();
+    const isFirstLoad = useRef(true);
+    const wasGeneratingRef = useRef(false);
     const [viewMode, setViewMode] = useState<'full' | 'active'>(() => {
         try {
             const saved = localStorage.getItem('bridge_flow_view_mode');
@@ -262,7 +80,6 @@ export function VisualFlow({
         }
     });
 
-    // Khởi tạo Theme Sáng/Tối và lưu bền vững vào localStorage
     const [theme, setTheme] = useState<'light' | 'dark'>(() => {
         try {
             const saved = localStorage.getItem('bridge_flow_theme');
@@ -272,7 +89,6 @@ export function VisualFlow({
         }
     });
 
-    // Khởi tạo kích thước Panel và lưu bền vững vào localStorage
     const [panelWidth, setPanelWidth] = useState<number>(() => {
         try {
             const saved = localStorage.getItem('bridge_response_panel_width');
@@ -300,7 +116,6 @@ export function VisualFlow({
         }
     });
 
-    // Đồng bộ thay đổi kích thước & Theme lên localStorage
     useEffect(() => {
         localStorage.setItem('bridge_flow_theme', theme);
     }, [theme]);
@@ -321,11 +136,9 @@ export function VisualFlow({
         localStorage.setItem('bridge_show_response_panel', JSON.stringify(showResponsePanel));
     }, [showResponsePanel]);
 
-    // Khai báo quản lý trạng thái Node / Edge bằng Hook chuyên dụng
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-    // Sync nodes state with a ref to read current drag positions
     const nodesRef = useRef<Node[]>([]);
     useEffect(() => {
         nodesRef.current = nodes;
@@ -362,21 +175,10 @@ export function VisualFlow({
             });
     };
 
-    // Tìm phản hồi cuối cùng từ AI
     const lastAssistantMessage = useMemo(() => {
         return [...messages].reverse().find(m => m.role === 'assistant');
     }, [messages]);
 
-    const lastAssistantContentHtml = useMemo(() => {
-        if (!lastAssistantMessage || !lastAssistantMessage.content) return '';
-        try {
-            return marked.parse(lastAssistantMessage.content) as string;
-        } catch (e) {
-            return lastAssistantMessage.content;
-        }
-    }, [lastAssistantMessage]);
-
-    // Parse Markdown của Node đang được chọn trong Inspector
     const inspectorHtml = useMemo(() => {
         if (!selectedNode || !selectedNode.data.content) return '';
         try {
@@ -386,11 +188,9 @@ export function VisualFlow({
         }
     }, [selectedNode]);
 
-    // Lọc danh sách tin nhắn hiển thị tùy chế độ (Toàn bộ / Lượt hiện tại)
     const filteredMessages = useMemo(() => {
         if (viewMode === 'full') return messages;
 
-        // Chế độ Focus: Tìm và chỉ trích xuất duy nhất Turn hội thoại cuối cùng
         const lastUserIdx = [...messages].reverse().findIndex(m => m.role === 'user');
         if (lastUserIdx === -1) return messages;
 
@@ -398,37 +198,6 @@ export function VisualFlow({
         return messages.slice(actualIdx);
     }, [messages, viewMode]);
 
-    // Phân rã cấu trúc tin nhắn phẳng thành các "Turn" có cấu trúc
-    const structuredTurns = useMemo(() => {
-        const turns: Array<{ user?: ChatMessage; assistant?: ChatMessage; userIdx?: number; assistantIdx?: number }> = [];
-        let currentTurn: any = {};
-
-        filteredMessages.forEach((msg, idx) => {
-            // Định vị lại chỉ số gốc (index) của tin nhắn trong mảng messages chính thức
-            const originalIndex = messages.indexOf(msg);
-            const actualIndex = originalIndex !== -1 ? originalIndex : idx;
-
-            if (msg.role === 'user') {
-                if (currentTurn.user) {
-                    turns.push(currentTurn);
-                    currentTurn = {};
-                }
-                currentTurn.user = msg;
-                currentTurn.userIdx = actualIndex;
-            } else if (msg.role === 'assistant') {
-                currentTurn.assistant = msg;
-                currentTurn.assistantIdx = actualIndex;
-                turns.push(currentTurn);
-                currentTurn = {};
-            }
-        });
-        if (currentTurn.user || currentTurn.assistant) {
-            turns.push(currentTurn);
-        }
-        return turns;
-    }, [filteredMessages, messages]);
-
-    // Xử lý kéo dãn Panel (Resize Handler)
     const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
     const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -448,9 +217,7 @@ export function VisualFlow({
         const deltaX = e.clientX - resizeStart.current.x;
         const deltaY = e.clientY - resizeStart.current.y;
 
-        // Vì panel neo góc bên phải, kéo chuột sang bên trái (deltaX âm) -> rộng ra
         const newWidth = Math.max(260, Math.min(900, resizeStart.current.w - deltaX));
-        // Kéo chuột xuống dưới (deltaY dương) -> cao lên
         const newHeight = Math.max(150, Math.min(700, resizeStart.current.h + deltaY));
 
         setPanelWidth(newWidth);
@@ -462,299 +229,219 @@ export function VisualFlow({
         e.currentTarget.releasePointerCapture(e.pointerId);
     };
 
-    // 🧬 ĐỒNG BỘ TRẠNG THÁI: Tự động chuyển đổi chuỗi tin nhắn sang Node & Edge khi có thay đổi
     useEffect(() => {
-        const nodesList: Node[] = [];
-        const edgesList: Edge[] = [];
-        let lastNodeId: string | null = null;
-        let latestUserNodeId: string | null = null; // Theo dõi prompt người dùng gần nhất để liên kết đầu vào
+        if (!workspaceData) return;
 
-        const colX = {
-            user: 50,
-            orchestrator: 400,
-            worker: 750,
-            tool: 1100,
-            validator: 1450
+        const nodesList: any[] = [];
+        const edgesList: any[] = [];
+
+        const currentStepMap = workspaceData.states || [];
+        const runningStepKey = workspaceData.activeTask?.step_key || '';
+
+        const harnessNodesConfig = workspaceData.harness_config?.nodes || {
+            "planner": { "type": "agent", "next": "coder" },
+            "coder": { "type": "agent", "next": "validator" },
+            "validator": { "type": "validator", "next_on_success": "end", "next_on_failure": "healer" },
+            "healer": { "type": "agent", "next": "coder" }
         };
+        const initialNode = workspaceData.harness_config?.initial_node || "planner";
 
-        const layerY = { 0: 60, 1: 60, 2: 60, 3: 60, 4: 60 };
+        const layoutNodePositions = (nodesConfig: any, startNode: string) => {
+            const positions: Record<string, { x: number; y: number; depth: number }> = {};
+            const visited = new Set<string>();
+            const queue: Array<{ name: string; depth: number }> = [{ name: startNode, depth: 0 }];
 
-        // Khai báo biến hỗ trợ hiển thị pipeline động
-        const runningStepKey = workspaceData?.activeTask?.step_key || '';
-        const currentStepMap = workspaceData?.states || [];
+            while (queue.length > 0) {
+                const { name, depth } = queue.shift()!;
+                if (visited.has(name) || !nodesConfig[name]) continue;
+                visited.add(name);
 
-        // Helper chèn node có bảo toàn tọa độ kéo thả từ Ref kèm tiêm (inject) Theme hiện hành
-        const addNode = (node: Node) => {
-            const existingNode = nodesRef.current.find(n => n.id === node.id);
-            if (existingNode) {
-                node.position = existingNode.position;
-            }
-            node.data = { ...node.data, theme }; // Tiêm theme vào data
-            nodesList.push(node);
-        };
+                const siblingCount = Object.values(positions).filter(p => p.depth === depth).length;
 
-        structuredTurns.forEach((turn, tIdx) => {
-            // Ghi nhận toạ độ biên trên (Top Bound) của lượt này
-            const turnStartY = Math.min(layerY[0], layerY[1], layerY[2], layerY[3], layerY[4]);
+                positions[name] = {
+                    x: 100 + depth * 320,
+                    y: 120 + siblingCount * 220,
+                    depth
+                };
 
-            // 1. RENDER PROMPT DECK CỦA USER
-            if (turn.user) {
-                const userNodeId = `user-${turn.userIdx}`;
-                addNode({
-                    id: userNodeId,
-                    type: 'cyberUser',
-                    data: { content: turn.user.content, images: turn.user.images },
-                    position: { x: colX.user, y: layerY[0] }
-                });
-
-                // Vẽ đường nối vuông góc tuần tự (Sequence) nối tiếp giữa các phiên hội thoại nếu có
-                if (lastNodeId) {
-                    edgesList.push({
-                        id: `edge-seq-${lastNodeId}-${userNodeId}`,
-                        source: lastNodeId,
-                        target: userNodeId,
-                        type: 'smoothstep',
-                        animated: false,
-                        style: {
-                            stroke: theme === 'dark' ? '#00f0ff' : '#0ea5e9',
-                            strokeWidth: 1,
-                            strokeDasharray: '4 4',
-                            opacity: theme === 'dark' ? 0.3 : 0.6
-                        }
-                    });
+                const config = nodesConfig[name];
+                if (config.next) {
+                    queue.push({ name: config.next, depth: depth + 1 });
                 }
-
-                lastNodeId = userNodeId;
-                latestUserNodeId = userNodeId;
-                layerY[0] += 200;
-            }
-
-            // 2. RENDER MASTER ORCHESTRATOR & CÁC WORKER AGENT CON
-            if (turn.assistant) {
-                const isLastMessage = turn.assistantIdx === messages.length - 1;
-                const isStreaming = isLastMessage && isGenerating;
-                const orchNodeId = `orchestrator-${turn.assistantIdx}`;
-
-                addNode({
-                    id: orchNodeId,
-                    type: 'cyberAgent',
-                    data: {
-                        name: "Master Orchestrator",
-                        role: "Lead Technical Architect",
-                        model: "System Host",
-                        state: isStreaming && (!turn.assistant.steps || turn.assistant.steps.length === 0) ? 'thinking' : 'completed',
-                        content: turn.assistant.content
-                    },
-                    position: { x: colX.orchestrator, y: layerY[1] }
-                });
-
-                // Liên kết Orchestrator trực tiếp với Prompt Deck thực tế của người dùng
-                if (latestUserNodeId) {
-                    edgesList.push({
-                        id: `edge-${latestUserNodeId}-${orchNodeId}`,
-                        source: latestUserNodeId,
-                        target: orchNodeId,
-                        type: 'smoothstep',
-                        animated: isStreaming && (!turn.assistant.steps || turn.assistant.steps.length === 0),
-                        style: {
-                            stroke: theme === 'dark' ? '#ffb700' : '#d97706',
-                            strokeWidth: 2,
-                            filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ffb700)' : undefined
-                        }
-                    });
+                if (config.next_on_success) {
+                    queue.push({ name: config.next_on_success, depth: depth + 1 });
                 }
-
-                lastNodeId = orchNodeId;
-                layerY[1] += 220;
-
-                if (turn.assistant.steps && turn.assistant.steps.length > 0) {
-                    const workerNodeId = `worker-${turn.assistantIdx}`;
-                    addNode({
-                        id: workerNodeId,
-                        type: 'cyberAgent',
-                        data: {
-                            name: "Specialist Worker",
-                            role: "Code & Terminal Executor",
-                            model: activeModel,
-                            state: isStreaming ? 'running' : 'completed'
-                        },
-                        position: { x: colX.worker, y: layerY[2] }
-                    });
-
-                    edgesList.push({
-                        id: `edge-${orchNodeId}-${workerNodeId}`,
-                        source: orchNodeId,
-                        target: workerNodeId,
-                        type: 'smoothstep',
-                        animated: isStreaming,
-                        style: {
-                            stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
-                            strokeWidth: 2,
-                            filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ff007f)' : undefined
-                        }
-                    });
-
-                    let lastToolNodeId: string | null = null;
-
-                    turn.assistant.steps.forEach((step: ExecutionStep, sIdx: number) => {
-                        const stepNodeId = `step-${step.id || `${turn.assistantIdx}-${sIdx}`}`;
-                        const isLastStep = sIdx === turn.assistant!.steps!.length - 1;
-                        const isStepRunning = isLastStep && isStreaming && !step.output;
-
-                        if (step.type === 'agent') {
-                            // RENDER CÁC WORKER SUB-AGENTS CHUYÊN BIỆT THÀNH CYBERAGENT CHÍNH THỨC
-                            addNode({
-                                id: stepNodeId,
-                                type: 'cyberAgent',
-                                data: {
-                                    name: step.title || "Worker Agent",
-                                    role: "Specialist Sub-Agent",
-                                    model: step.toolName || "Worker",
-                                    state: step.output ? 'completed' : (isStepRunning ? 'running' : 'completed'),
-                                    content: step.output || step.input
-                                },
-                                position: { x: colX.worker, y: layerY[2] }
-                            });
-
-                            edgesList.push({
-                                id: `edge-${workerNodeId}-${stepNodeId}`,
-                                source: workerNodeId,
-                                target: stepNodeId,
-                                type: 'smoothstep',
-                                animated: isStepRunning,
-                                style: {
-                                    stroke: theme === 'dark' ? '#ff007f' : '#c026d3',
-                                    strokeWidth: 2,
-                                    filter: theme === 'dark' ? 'drop-shadow(0 0 5px #ff007f)' : undefined
-                                }
-                            });
-
-                            lastToolNodeId = stepNodeId;
-                            layerY[2] += 220;
-                        } else {
-                            // VẼ CÁC SYSTEM ACTION TIÊU CHUẨN (CÓ SMOOTHSTEP)
-                            addNode({
-                                id: stepNodeId,
-                                type: 'cyberTool',
-                                data: {
-                                    title: step.title,
-                                    tool: step.toolName || step.type,
-                                    input: step.input,
-                                    output: step.output,
-                                    state: step.output ? 'completed' : (isStepRunning ? 'running' : 'completed')
-                                },
-                                position: { x: colX.tool, y: layerY[3] }
-                            });
-
-                            edgesList.push({
-                                id: `edge-${workerNodeId}-${stepNodeId}`,
-                                source: workerNodeId,
-                                target: stepNodeId,
-                                type: 'smoothstep',
-                                animated: isStepRunning,
-                                style: {
-                                    stroke: step.output
-                                        ? (theme === 'dark' ? '#39ff14' : '#16a34a')
-                                        : (theme === 'dark' ? '#ff5e00' : '#ea580c'),
-                                    strokeWidth: 1.5,
-                                    filter: theme === 'dark'
-                                        ? (step.output ? 'drop-shadow(0 0 3px #39ff14)' : 'drop-shadow(0 0 3px #ff5e00)')
-                                        : undefined
-                                }
-                            });
-
-                            lastToolNodeId = stepNodeId;
-                            layerY[3] += 180;
-                        }
-                    });
-
-                    lastNodeId = lastToolNodeId || workerNodeId;
-                    layerY[2] += 220;
-                }
-
-                const isPipelineStepActive = workspaceData?.pipeline && runningStepKey;
-                const currentActiveStep = currentStepMap.find(s => s.step_key === runningStepKey);
-
-                if (isPipelineStepActive && isLastMessage && currentActiveStep) {
-                    const valNodeId = `validator-${turn.assistantIdx}`;
-                    const isValRunning = currentActiveStep.state === 'VALIDATING';
-                    const isBlocked = currentActiveStep.state === 'BLOCKED' || currentActiveStep.state === 'FAILED';
-
-                    addNode({
-                        id: valNodeId,
-                        type: 'cyberValidator',
-                        data: {
-                            name: "Quality Validator",
-                            state: isValRunning ? 'validating' : isBlocked ? 'blocked' : 'passed'
-                        },
-                        position: { x: colX.validator, y: layerY[4] }
-                    });
-
-                    edgesList.push({
-                        id: `edge-${lastNodeId}-${valNodeId}`,
-                        source: lastNodeId!,
-                        target: valNodeId,
-                        type: 'smoothstep',
-                        animated: isValRunning,
-                        style: {
-                            stroke: isValRunning
-                                ? (theme === 'dark' ? '#00f0ff' : '#0284c7')
-                                : isBlocked
-                                    ? (theme === 'dark' ? '#ff007f' : '#dc2626')
-                                    : (theme === 'dark' ? '#39ff14' : '#16a34a'),
-                            strokeWidth: 2,
-                            filter: theme === 'dark'
-                                ? (isValRunning ? 'drop-shadow(0 0 5px #00f0ff)' : isBlocked ? 'drop-shadow(0 0 5px #ff007f)' : 'drop-shadow(0 0 5px #39ff14)')
-                                : undefined
-                        }
-                    });
-
-                    lastNodeId = valNodeId;
-                    layerY[4] += 180;
+                if (config.next_on_failure) {
+                    queue.push({ name: config.next_on_failure, depth: depth + 1 });
                 }
             }
 
-            // Ghi nhận toạ độ biên dưới (Bottom Bound) và vẽ hộp nhóm cho lượt hội thoại này
-            const turnEndY = Math.max(layerY[0], layerY[1], layerY[2], layerY[3], layerY[4]);
-            const turnHeight = turnEndY - turnStartY;
-
-            // Chèn node group vào đầu danh sách để làm hình nền nằm dưới
-            const displayIdx = messages.indexOf(turn.user || turn.assistant || {} as ChatMessage);
-            const turnNumber = displayIdx !== -1 ? Math.floor(displayIdx / 2) + 1 : tIdx + 1;
-            const turnLabel = turn.user
-                ? `Lượt #${turnNumber}: "${turn.user.content.substring(0, 45)}${turn.user.content.length > 45 ? '...' : ''}"`
-                : `Lượt #${turnNumber}`;
-
-            nodesList.unshift({
-                id: `group-${tIdx}`,
-                type: 'cyberGroup',
-                data: {
-                    label: turnLabel,
-                    width: 1540,
-                    height: turnHeight + 40,
-                    theme
-                },
-                position: { x: 20, y: turnStartY - 20 },
-                style: { pointerEvents: 'none', zIndex: -1 }
+            Object.keys(nodesConfig).forEach((name, idx) => {
+                if (!positions[name]) {
+                    positions[name] = { x: 100 + idx * 320, y: 450, depth: idx };
+                }
             });
 
-            // Tự động dịch chuyển dòng biên để lượt hội thoại sau nằm bên dưới lượt trước
-            const nextTurnGap = 80;
-            layerY[0] = turnEndY + nextTurnGap;
-            layerY[1] = turnEndY + nextTurnGap;
-            layerY[2] = turnEndY + nextTurnGap;
-            layerY[3] = turnEndY + nextTurnGap;
-            layerY[4] = turnEndY + nextTurnGap;
+            return positions;
+        };
+
+        const calculatedPositions = layoutNodePositions(harnessNodesConfig, initialNode);
+
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        const userNodeId = 'user-prompt-node';
+        if (lastUserMsg) {
+            nodesList.push({
+                id: userNodeId,
+                type: 'cyberUser',
+                data: {
+                    content: lastUserMsg.content,
+                    images: lastUserMsg.images,
+                    theme
+                },
+                position: { x: 50, y: 120 }
+            });
+        }
+
+        Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
+            const position = calculatedPositions[nodeName] || { x: 300, y: 150 };
+            const dbState = currentStepMap.find(s => s.step_key === nodeName);
+            let stateString = 'idle';
+
+            if (dbState) {
+                if (dbState.state === 'RUNNING') stateString = 'running';
+                else if (dbState.state === 'VALIDATING') stateString = 'thinking';
+                else if (dbState.state === 'DONE') stateString = 'completed';
+                else if (dbState.state === 'FAILED' || dbState.state === 'BLOCKED') stateString = 'failed';
+            }
+
+            const isValidator = nodeVal.type === 'validator';
+
+            nodesList.push({
+                id: nodeName,
+                type: isValidator ? 'cyberValidator' : 'cyberAgent',
+                data: {
+                    theme,
+                    name: nodeName.toUpperCase(),
+                    role: isValidator ? "Strict Quality Gate" : "Specialist Worker Node",
+                    model: workspaceData.provider.model || "Local Engine",
+                    state: stateString,
+                    content: dbState ? dbState.summary : ""
+                },
+                position: {
+                    x: lastUserMsg ? position.x + 300 : position.x,
+                    y: position.y
+                }
+            });
         });
 
-        setNodes(nodesList as any);
-        setEdges(edgesList as any);
-    }, [messages, isGenerating, activeModel, workspaceData, setNodes, setEdges, theme, viewMode, structuredTurns]);
+        if (lastUserMsg) {
+            edgesList.push({
+                id: `edge-user-to-entry`,
+                source: userNodeId,
+                target: initialNode,
+                type: 'smoothstep',
+                animated: runningStepKey === initialNode,
+                style: {
+                    stroke: theme === 'dark' ? '#00f0ff' : '#0ea5e9',
+                    strokeWidth: 2,
+                    filter: theme === 'dark' ? 'drop-shadow(0 0 5px #00f0ff)' : undefined
+                }
+            });
+        }
+
+        Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
+            const dbSourceState = currentStepMap.find(s => s.step_key === nodeName);
+
+            const addEdgeHelper = (targetNodeName: string) => {
+                const dbTargetState = currentStepMap.find(s => s.step_key === targetNodeName);
+                const isEdgeActive = (dbSourceState?.state === 'DONE' && dbTargetState?.state === 'RUNNING') ||
+                    (dbSourceState?.state === 'RUNNING');
+
+                edgesList.push({
+                    id: `edge-flow-${nodeName}-${targetNodeName}`,
+                    source: nodeName,
+                    target: targetNodeName,
+                    type: 'smoothstep',
+                    animated: isEdgeActive,
+                    style: {
+                        stroke: isEdgeActive
+                            ? (theme === 'dark' ? '#ff007f' : '#c026d3')
+                            : (theme === 'dark' ? '#27272a' : '#d4d4d8'),
+                        strokeWidth: isEdgeActive ? 2.5 : 1.5,
+                        filter: (isEdgeActive && theme === 'dark') ? 'drop-shadow(0 0 4px #ff007f)' : undefined
+                    }
+                });
+            };
+
+            if (nodeVal.next) addEdgeHelper(nodeVal.next);
+            if (nodeVal.next_on_success) addEdgeHelper(nodeVal.next_on_success);
+            if (nodeVal.next_on_failure) addEdgeHelper(nodeVal.next_on_failure);
+        });
+
+        if (workspaceData.activeTask && runningStepKey) {
+            const toolNodeId = `active-system-tool-node`;
+            const parentPosition = calculatedPositions[runningStepKey] || { x: 300, y: 150 };
+            const correctParentX = lastUserMsg ? parentPosition.x + 300 : parentPosition.x;
+
+            nodesList.push({
+                id: toolNodeId,
+                type: 'cyberTool',
+                data: {
+                    theme,
+                    tool: workspaceData.activeTask.tool || "SYSTEM ACTION",
+                    title: workspaceData.activeTask.description || "Đang thực thi lệnh hệ thống...",
+                    state: "running"
+                },
+                position: { x: correctParentX, y: parentPosition.y + 220 }
+            });
+
+            edgesList.push({
+                id: `edge-agent-to-tool`,
+                source: runningStepKey,
+                target: toolNodeId,
+                type: 'smoothstep',
+                animated: true,
+                style: {
+                    stroke: '#ff5e00',
+                    strokeWidth: 2,
+                    filter: theme === 'dark' ? 'drop-shadow(0 0 4px #ff5e00)' : undefined
+                }
+            });
+        }
+
+        setNodes(nodesList);
+        setEdges(edgesList);
+
+    }, [messages, isGenerating, workspaceData, setNodes, setEdges, theme, viewMode]);
+
+    useEffect(() => {
+        if (nodes.length > 0 && isFirstLoad.current) {
+            const timer = setTimeout(() => {
+                fitView({ padding: 0.15, duration: 800 });
+                isFirstLoad.current = false;
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [nodes.length, fitView]);
+
+    useEffect(() => {
+        if (isGenerating && !wasGeneratingRef.current && nodes.length > 0) {
+            const activeNode = nodes.find((n) =>
+                n.data?.state === 'running' || n.data?.state === 'thinking' || n.data?.state === 'validating'
+            ) || nodes[nodes.length - 1];
+
+            if (activeNode) {
+                const { x, y } = activeNode.position;
+                const currentZoom = getZoom() || 0.85;
+                setCenter(x + 100, y + 180, { zoom: currentZoom, duration: 800 });
+            }
+        }
+        wasGeneratingRef.current = isGenerating;
+    }, [isGenerating, nodes, setCenter, getZoom]);
 
     return (
         <div className={`flex-1 flex flex-col h-full overflow-hidden relative select-none transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-100 text-zinc-800'}`} style={{ height: '100%', minHeight: '500px' }}>
 
-            {/* REACTFLOW MAIN CANVAS */}
             <div className="flex-1 h-full w-full relative" style={{ height: '100%' }}>
                 <ReactFlow
                     nodes={nodes}
@@ -763,8 +450,6 @@ export function VisualFlow({
                     onEdgesChange={onEdgesChange}
                     nodeTypes={nodeTypes}
                     onNodeClick={(_, node) => setSelectedNode(node)}
-                    fitView
-                    fitViewOptions={{ padding: 0.15 }}
                     className={theme === 'dark' ? 'bg-[#05050c]' : 'bg-[#f4f4f5]'}
                     proOptions={{ hideAttribution: true }}
                 >
@@ -782,7 +467,6 @@ export function VisualFlow({
                     />
                 </ReactFlow>
 
-                {/* 🌗 FLOATING THEME TOGGLE & VIEW MODE CONTROL PANEL */}
                 <div className="absolute top-4 left-4 z-40 flex gap-2 pointer-events-auto select-none">
                     <button
                         type="button"
@@ -809,7 +493,6 @@ export function VisualFlow({
                     </button>
                 </div>
 
-                {/* 🤖 FLOATING LATEST AI RESPONSE OVERLAY PANEL (WITH DYNAMIC RESIZING & COOPERATING MARKDOWN THEME) */}
                 {lastAssistantMessage && (
                     <div className="absolute top-4 right-4 z-40 flex flex-col items-end pointer-events-none select-none">
                         <button
@@ -835,13 +518,10 @@ export function VisualFlow({
                                     }`}>
                                     🤖 Latest Assistant Output
                                 </h3>
-                                <div
-                                    className={`text-[14px] leading-relaxed select-text flex-1 overflow-y-auto scrollbar-thin pr-1 ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
-                                        }`}
-                                    dangerouslySetInnerHTML={{ __html: lastAssistantContentHtml }}
-                                />
+                                <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 select-text">
+                                    <TimelineTextBlock content={lastAssistantMessage.content} theme={theme} />
+                                </div>
 
-                                {/* Diagonal Resize Handle at bottom-left corner */}
                                 <div
                                     onPointerDown={handleResizePointerDown}
                                     onPointerMove={handleResizePointerMove}
@@ -861,7 +541,6 @@ export function VisualFlow({
                     </div>
                 )}
 
-                {/* FLOATING RETRO DECK CHAT OVERLAY */}
                 <div className="absolute bottom-4 left-4 right-4 z-50 max-w-4xl mx-auto select-none pointer-events-auto">
                     <ChatInputForm
                         activeAgent={activeAgent}
@@ -879,7 +558,6 @@ export function VisualFlow({
                 </div>
             </div>
 
-            {/* STRUCTURED PERMISSION HITL OVERLAY */}
             {pendingPermission && (() => {
                 let structuredQuestions = null;
                 if (pendingPermission.details && pendingPermission.details.trim().startsWith('{')) {
@@ -891,62 +569,67 @@ export function VisualFlow({
                     } catch { }
                 }
 
-                // Nếu phát hiện dữ liệu là Structured Questions, dựng giao diện wizard trực quan
                 if (structuredQuestions) {
                     return (
-                        <div className="absolute top-4 left-4 right-4 z-50 max-w-md mx-auto p-4 bg-white border border-zinc-200 rounded-xl space-y-3 shadow-xl text-left relative overflow-hidden text-zinc-800">
-                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-amber-500" />
-                            <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[11px] font-mono select-none">
-                                <span className="animate-pulse">❓</span> YÊU CẦU LÀM RÕ THÔNG TIN (STRUCTURED WIZARD)
+                        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs select-text">
+                            <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-xl shadow-2xl p-6 relative overflow-hidden text-zinc-800 flex flex-col text-left" style={{ animation: 'zoomIn 0.18s ease-out' }}>
+                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-amber-500" />
+                                <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[11px] font-mono select-none mb-3">
+                                    <span className="animate-pulse">❓</span> YÊU CẦU LÀM RÕ THÔNG TIN (STRUCTURED WIZARD)
+                                </div>
+                                <div className="overflow-y-auto max-h-[70vh] pr-1">
+                                    <StructuredQuestionsForm
+                                        data={structuredQuestions}
+                                        onSubmit={(ans) => {
+                                            respondToPermission(pendingPermission.id, JSON.stringify(ans));
+                                        }}
+                                        onCancel={() => respondToPermission(pendingPermission.id, 'n')}
+                                    />
+                                </div>
                             </div>
-                            <StructuredQuestionsForm
-                                data={structuredQuestions}
-                                onSubmit={(ans) => respondToPermission(pendingPermission.id, JSON.stringify(ans))}
-                                onCancel={() => respondToPermission(pendingPermission.id, 'n')}
-                            />
                         </div>
                     );
                 }
 
-                // Fallback đối với các yêu cầu xác nhận Terminal hoặc Sửa file thông thường
                 return (
-                    <div className="absolute top-4 left-4 right-4 z-50 max-w-md mx-auto p-4 bg-zinc-900 border border-amber-500 rounded-xl space-y-3 shadow-[0_0_20px_rgba(245,158,11,0.2)] text-left select-text">
-                        <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[11px] font-mono">
-                            <span className="animate-pulse">⚠️</span> hitl approval required
-                        </div>
-                        <p className="text-[11px] text-zinc-200 leading-relaxed font-semibold">
-                            {pendingPermission.query}
-                        </p>
-                        {pendingPermission.details && (
-                            <pre className="p-2 bg-black border border-zinc-800 text-[10px] text-zinc-400 font-mono rounded overflow-auto max-h-24 whitespace-pre-wrap">
-                                {pendingPermission.details}
-                            </pre>
-                        )}
-                        <div className="flex gap-1.5 justify-end">
-                            <button
-                                onClick={() => respondToPermission(pendingPermission.id, 'n')}
-                                className="px-2.5 py-1.5 border border-red-500 bg-red-950/20 text-red-500 rounded-lg text-[10px] font-mono font-bold hover:bg-red-500/20 transition-all cursor-pointer"
-                            >
-                                DENY
-                            </button>
-                            <button
-                                onClick={() => respondToPermission(pendingPermission.id, 'y')}
-                                className="px-2.5 py-1.5 border border-blue-500 bg-blue-950/20 text-blue-400 rounded-lg text-[10px] font-mono font-bold hover:bg-blue-50/20 transition-all cursor-pointer"
-                            >
-                                APPROVE (YES)
-                            </button>
-                            <button
-                                onClick={() => respondToPermission(pendingPermission.id, 'a')}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
-                            >
-                                APPROVE ALL
-                            </button>
+                    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs select-text">
+                        <div className="bg-zinc-900 border border-amber-500 rounded-2xl p-6 space-y-4 shadow-2xl text-left max-w-md w-full relative" style={{ animation: 'zoomIn 0.18s ease-out' }}>
+                            <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[11px] font-mono select-none">
+                                <span className="animate-pulse">⚠️</span> hitl approval required
+                            </div>
+                            <p className="text-xs text-zinc-200 leading-relaxed font-semibold">
+                                {pendingPermission.query}
+                            </p>
+                            {pendingPermission.details && (
+                                <pre className="p-3 bg-black border border-zinc-800 text-[10px] text-zinc-400 font-mono rounded overflow-auto max-h-40 whitespace-pre-wrap">
+                                    {pendingPermission.details}
+                                </pre>
+                            )}
+                            <div className="flex gap-1.5 justify-end pt-1">
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, 'n')}
+                                    className="px-3.5 py-1.5 border border-red-500 bg-red-950/20 text-red-500 rounded-lg text-[10px] font-mono font-bold hover:bg-red-500/20 transition-all cursor-pointer"
+                                >
+                                    DENY
+                                </button>
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, 'y')}
+                                    className="px-3.5 py-1.5 border border-blue-500 bg-blue-950/20 text-blue-400 rounded-lg text-[10px] font-mono font-bold hover:bg-blue-50/20 transition-all cursor-pointer"
+                                >
+                                    APPROVE (YES)
+                                </button>
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, 'a')}
+                                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
+                                >
+                                    APPROVE ALL
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
             })()}
 
-            {/* Cyberpunk Inspector Panel (LIGHTBOX MODAL WITH DYNAMIC THEMING) */}
             <AnimatePresence>
                 {selectedNode && (
                     <div
@@ -966,7 +649,6 @@ export function VisualFlow({
                                 boxShadow: theme === 'dark' ? '0 0 30px rgba(0, 240, 255, 0.1)' : undefined
                             }}
                         >
-                            {/* Header */}
                             <div className={`px-6 py-4 flex justify-between items-center select-none shrink-0 transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-b border-zinc-800' : 'bg-zinc-50 border-b border-zinc-200'
                                 }`}>
                                 <div className="text-left">
@@ -990,7 +672,6 @@ export function VisualFlow({
                                 </button>
                             </div>
 
-                            {/* Node Contents Display */}
                             <div className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${theme === 'dark' ? 'bg-[#020204]' : 'bg-white'
                                 }`}>
                                 <div className={`flex justify-between items-start flex-wrap gap-2 border-b pb-4 ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-100'
@@ -1012,18 +693,13 @@ export function VisualFlow({
                                     )}
                                 </div>
 
-                                {/* USER NODE DETAILS */}
                                 {selectedNode.type === 'cyberUser' && (
                                     <div className="space-y-4">
                                         <div className="space-y-1">
                                             <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-cyan-500' : 'text-cyan-600'}`}>💬 PROMPT CONTENT:</div>
                                             <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
                                                 }`}>
-                                                <div
-                                                    className={`text-[14px] leading-relaxed select-text ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
-                                                        }`}
-                                                    dangerouslySetInnerHTML={{ __html: inspectorHtml }}
-                                                />
+                                                <TimelineTextBlock content={selectedNode.data.content} theme={theme} />
                                             </div>
                                         </div>
                                         {selectedNode.data.images && selectedNode.data.images.length > 0 && (
@@ -1039,7 +715,6 @@ export function VisualFlow({
                                     </div>
                                 )}
 
-                                {/* AGENT NODE DETAILS */}
                                 {selectedNode.type === 'cyberAgent' && (
                                     <div className="space-y-4">
                                         <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
@@ -1064,7 +739,6 @@ export function VisualFlow({
                                     </div>
                                 )}
 
-                                {/* TOOL NODE DETAILS */}
                                 {selectedNode.type === 'cyberTool' && (
                                     <div className="space-y-4">
                                         <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
@@ -1073,7 +747,6 @@ export function VisualFlow({
                                             <div>• Task Description: <span className="font-semibold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.title}</span></div>
                                         </div>
 
-                                        {/* RENDER CHI TIẾT FILE NẾU LÀ REPLACE/WRITE */}
                                         {selectedNode.data.tool === 'replace_content_safe' && selectedNode.data.input && (() => {
                                             try {
                                                 const parsed = JSON.parse(selectedNode.data.input);
@@ -1140,20 +813,89 @@ export function VisualFlow({
                                             } catch { return null; }
                                         })()}
 
-                                        {/* Standard Tool Inputs */}
-                                        {selectedNode.data.input && !['replace_content_safe', 'write_file'].includes(selectedNode.data.tool) && (
-                                            <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
-                                                <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>⚙️ INPUT ARGUMENTS:</div>
-                                                <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap select-text leading-relaxed transition-colors ${theme === 'dark'
-                                                    ? 'bg-zinc-900 border-zinc-800 text-blue-400'
-                                                    : 'bg-zinc-50 border-zinc-200 text-blue-600'
-                                                    }`}>
-                                                    {selectedNode.data.input}
-                                                </pre>
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            let structuredQuestions = null;
+                                            if (selectedNode.data.input && typeof selectedNode.data.input === 'string' && selectedNode.data.input.trim().startsWith('{')) {
+                                                try {
+                                                    const parsed = JSON.parse(selectedNode.data.input);
+                                                    if (parsed.questions || parsed.explanation) {
+                                                        structuredQuestions = parsed;
+                                                    }
+                                                } catch { }
+                                            }
 
-                                        {/* Tool Output / Result */}
+                                            if (structuredQuestions) {
+                                                return (
+                                                    <div className={`space-y-3 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                        <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>
+                                                            ❓ INTERACTIVE STRUCTURED WIZARD
+                                                        </div>
+                                                        <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900/40 border-zinc-800 text-zinc-200' : 'bg-blue-50/30 border-blue-150 text-zinc-800'
+                                                            }`}>
+                                                            {pendingPermission ? (
+                                                                <StructuredQuestionsForm
+                                                                    data={structuredQuestions}
+                                                                    onSubmit={(ans) => {
+                                                                        respondToPermission(pendingPermission.id, JSON.stringify(ans));
+                                                                        setSelectedNode(null);
+                                                                    }}
+                                                                    onCancel={() => {
+                                                                        respondToPermission(pendingPermission.id, 'n');
+                                                                        setSelectedNode(null);
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <div className="space-y-4">
+                                                                    <div className={`border rounded-xl p-3 ${theme === 'dark' ? 'bg-blue-950/20 border-blue-900/50' : 'bg-blue-50/50 border-blue-100'
+                                                                        }`}>
+                                                                        <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-0.5">💡 EXPLANATION</span>
+                                                                        <p className={`text-[11px] leading-relaxed font-semibold ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>{structuredQuestions.explanation}</p>
+                                                                    </div>
+                                                                    <div className="space-y-3">
+                                                                        {Array.isArray(structuredQuestions.questions) && structuredQuestions.questions.map((q: any, qIdx: number) => (
+                                                                            <div key={q.id || qIdx} className={`border-b pb-2 last:border-b-0 ${theme === 'dark' ? 'border-zinc-800' : 'border-zinc-150/40'}`}>
+                                                                                <div className={`text-[11px] font-bold ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-850'}`}>
+                                                                                    <span className="text-blue-600 font-extrabold mr-1.5">{qIdx + 1}.</span>
+                                                                                    {q.question}
+                                                                                </div>
+                                                                                <div className="mt-1 text-[10px] text-zinc-500 font-mono">
+                                                                                    Type: <span className="text-blue-500 font-bold">{q.type}</span>
+                                                                                </div>
+                                                                                {q.options && (
+                                                                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                                                                        {q.options.map((opt: any, optIdx: number) => (
+                                                                                            <span key={optIdx} className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-600'
+                                                                                                }`}>
+                                                                                                {opt.label} {opt.is_default && '★'}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                selectedNode.data.input && !['replace_content_safe', 'write_file'].includes(selectedNode.data.tool) && (
+                                                    <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
+                                                        <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-orange-500' : 'text-orange-600'}`}>⚙️ INPUT ARGUMENTS:</div>
+                                                        <pre className={`p-3 border rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap select-text leading-relaxed transition-colors ${theme === 'dark'
+                                                            ? 'bg-zinc-900 border-zinc-800 text-blue-400'
+                                                            : 'bg-zinc-50 border-zinc-200 text-blue-600'
+                                                            }`}>
+                                                            {selectedNode.data.input}
+                                                        </pre>
+                                                    </div>
+                                                )
+                                            );
+                                        })()}
+
                                         {selectedNode.data.output && (
                                             <div className={`space-y-1.5 pt-3 border-t ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-200'}`}>
                                                 <div className="text-xs font-bold select-none font-mono text-emerald-500">⚙️ OUTPUT RESPONSE:</div>
@@ -1178,7 +920,6 @@ export function VisualFlow({
                                     </div>
                                 )}
 
-                                {/* VALIDATOR NODE DETAILS */}
                                 {selectedNode.type === 'cyberValidator' && (
                                     <div className="space-y-4">
                                         <div className={`text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'}`}>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>

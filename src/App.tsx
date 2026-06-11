@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// filepath: bridge_client/src/App.tsx
+import { useState, useEffect, useCallback } from "react";
 import { useSSE } from "./hooks/useSSE";
 import { VisualFlow } from "./components/terminal/VisualFlow";
 import { Telemetry } from "./components/Telemetry";
@@ -6,9 +7,15 @@ import { TraceViewer } from "./components/TraceViewer";
 import { MemoryGrid } from "./components/MemoryGrid";
 import { TelegramConfig } from "./components/TelegramConfig";
 import { SandboxManager } from "./components/SandboxManager";
+import { GraphBuilder } from "./components/GraphBuilder";
+
+import { SidebarHarnessList } from "./components/SidebarHarnessList";
+import { SidebarShadowChanges } from "./components/SidebarShadowChanges";
+import { DiffLightbox } from "./components/DiffLightbox";
+import { HarnessRunModal } from "./components/HarnessRunModal";
 import { highlightCodeLine } from "./lib/utils";
 
-type TabPanel = "flow" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox";
+type TabPanel = "flow" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox" | "builder";
 
 export interface WorkspaceData {
   success: boolean;
@@ -58,6 +65,31 @@ export interface WorkspaceData {
   activeTask?: {
     step_key: string;
     description: string;
+    tool?: string;
+  };
+  harness_config?: {
+    harness_name: string;
+    description: string;
+    initial_node: string;
+    state_schema: any;
+    nodes: Record<string, {
+      type: "agent" | "validator";
+      system_prompt?: string;
+      tools?: string[];
+      model_mode?: string;
+      next?: string;
+      validation_rule?: string;
+      target_file_key?: string;
+      next_on_success?: string;
+      next_on_failure?: string;
+    }>;
+    edges: Array<{ from: string; to: string }>;
+    conditional_edges?: Array<{
+      from: string;
+      condition_type: string;
+      state_key: string;
+      router: Record<string, string>;
+    }>;
   };
 }
 
@@ -76,7 +108,7 @@ interface ShadowChange {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabPanel>("flow"); // tab "flow" thay cho Web Terminal
+  const [activeTab, setActiveTab] = useState<TabPanel>("flow");
   const [goal, setGoal] = useState<string | null>(null);
 
   const [activeAgent] = useState<"MaxHermes" | "MaxClaw">("MaxHermes");
@@ -87,13 +119,19 @@ export default function App() {
   const [shadowChanges, setShadowChanges] = useState<ShadowChange[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<ShadowChange | null>(null);
   const [diffMode, setDiffMode] = useState<'cumulative' | 'latest'>('latest');
+
+  const [harnesses, setHarnesses] = useState<any[]>([]);
+  const [runningHarnessId, setRunningHarnessId] = useState<string | null>(null);
+  const [triggering, setTriggering] = useState(false);
+  const [editHarnessConfig, setEditHarnessConfig] = useState<any>(null);
+
   const sse = useSSE(() => {
     setReloadTrigger((prev) => prev + 1);
     fetchWorkspace();
     fetchShadowChanges();
   });
 
-  const fetchWorkspace = () => {
+  const fetchWorkspace = useCallback(() => {
     fetch("/api/dashboard/active-workspace")
       .then((res) => {
         if (!res.ok) throw new Error("Mất kết nối HTTP");
@@ -109,12 +147,12 @@ export default function App() {
         }
       })
       .catch((err) => {
-        console.error("Error reading active workspace state:", err);
+        console.error("Lỗi đồng bộ hóa bối cảnh Workspace:", err);
         setIsServerConnected(false);
       });
-  };
+  }, []);
 
-  const fetchShadowChanges = () => {
+  const fetchShadowChanges = useCallback(() => {
     fetch("/api/dashboard/shadow-changes")
       .then((res) => res.json())
       .then((data) => {
@@ -155,8 +193,19 @@ export default function App() {
           });
         }
       })
-      .catch((err) => console.error("Error fetching shadow changes:", err));
-  };
+      .catch((err) => console.error("Lỗi đồng bộ Shadow Files:", err));
+  }, []);
+
+  const fetchHarnesses = useCallback(() => {
+    fetch("/api/dashboard/harnesses")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setHarnesses(data.harnesses || []);
+        }
+      })
+      .catch((err) => console.error("Không thể lấy danh sách sơ đồ FSM mẫu:", err));
+  }, []);
 
   useEffect(() => {
     fetch("/api/dashboard/sessions")
@@ -166,39 +215,69 @@ export default function App() {
 
     fetchWorkspace();
     fetchShadowChanges();
+    fetchHarnesses();
 
     const interval = setInterval(() => {
       fetchWorkspace();
       fetchShadowChanges();
     }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchWorkspace, fetchShadowChanges, fetchHarnesses, reloadTrigger]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedDiff(null);
-      }
-    };
-    if (selectedDiff) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [selectedDiff]);
-
-  useEffect(() => {
-    if (selectedDiff) {
-      const timer = setTimeout(() => {
-        const firstChangeEl = document.querySelector('.diff-line-add, .diff-line-del');
-        if (firstChangeEl) {
-          firstChangeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const handleTriggerHarnessRun = (harnessId: string, taskPrompt: string) => {
+    setTriggering(true);
+    fetch("/api/dashboard/harnesses/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        harness_id: harnessId,
+        task: taskPrompt
+      })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          alert(data.message);
+          setRunningHarnessId(null);
+          setReloadTrigger((prev) => prev + 1);
+          setActiveTab("flow");
+        } else {
+          alert("Lỗi khởi chạy: " + data.error);
         }
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedDiff, diffMode]);
+      })
+      .catch((err) => alert("Gặp sự cố kết nối: " + err.message))
+      .finally(() => setTriggering(false));
+  };
+
+  const handleEditHarness = (harnessId: string) => {
+    fetch(`/api/dashboard/harnesses/${harnessId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.config) {
+          setEditHarnessConfig(data.config);
+          setActiveTab("builder");
+        } else {
+          alert("Không thể tải sơ đồ chi tiết: " + data.error);
+        }
+      })
+      .catch((err) => alert("Lỗi kết nối tới máy chủ: " + err.message));
+  };
+
+  const handleDeleteHarness = (harnessId: string, displayName: string) => {
+    if (!confirm(`⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn quy trình sơ đồ '${displayName}'? Thao tác này không thể hoàn tác.`)) return;
+
+    fetch(`/api/dashboard/harnesses/${harnessId}`, { method: "DELETE" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          alert(data.message);
+          setReloadTrigger((prev) => prev + 1);
+        } else {
+          alert("Gặp sự cố khi xóa sơ đồ: " + data.error);
+        }
+      })
+      .catch((err) => alert("Lỗi kết nối tới máy chủ: " + err.message));
+  };
 
   const handleViewDiffByPath = (filePath: string) => {
     if (!filePath) return;
@@ -310,6 +389,7 @@ export default function App() {
       )}
 
       <div className="flex flex-1 overflow-hidden h-full">
+        {/* SIDEBAR TRÁI */}
         <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700 overflow-y-auto">
           <div className="p-4 space-y-6">
             <div className="flex items-center gap-2 px-1">
@@ -321,10 +401,13 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => setActiveTab("flow")}
+              onClick={() => {
+                setEditHarnessConfig(null);
+                setActiveTab("flow");
+              }}
               className="flex items-center justify-center gap-2 w-full border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
             >
-              <span className="text-sm font-bold">+</span> New task
+              <span className="text-sm font-bold">+</span> Trò chuyện mới
             </button>
 
             <nav className="space-y-1">
@@ -334,6 +417,18 @@ export default function App() {
               >
                 <span className="text-sm">🌐</span> Visual Flow
               </button>
+
+              <button
+                onClick={() => {
+                  setEditHarnessConfig(null);
+                  setActiveTab("builder")
+                }
+                }
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "builder" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
+              >
+                <span className="text-sm">📐</span> Graph Builder
+              </button>
+
               <button
                 onClick={() => setActiveTab("traces")}
                 className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
@@ -385,56 +480,18 @@ export default function App() {
               </div>
             </div>
 
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between items-center px-3 mb-1.5">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Shadow Changes</span>
-                {shadowChanges.length > 0 && (
-                  <button
-                    onClick={() => handleRollback()}
-                    className="text-[9px] text-red-600 hover:underline font-bold bg-transparent border-none cursor-pointer flex items-center gap-1"
-                    title="Khôi phục tất cả các tệp về nguyên trạng"
-                  >
-                    ↩️ Reset All
-                  </button>
-                )}
-              </div>
+            <SidebarHarnessList
+              harnesses={harnesses}
+              onRun={(id) => setRunningHarnessId(id)}
+              onEdit={handleEditHarness}
+              onDelete={handleDeleteHarness}
+            />
 
-              {shadowChanges.length === 0 ? (
-                <div className="px-3 py-3 bg-white border border-zinc-200 rounded-xl">
-                  <p className="text-[10px] text-zinc-400 italic font-medium">Không có thay đổi nào.</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
-                  {shadowChanges.map((change) => (
-                    <div
-                      key={change.id || change.file}
-                      className="bg-white border border-zinc-200 rounded-xl p-3 shadow-2xs flex items-center justify-between group hover:border-zinc-300 hover:shadow-xs transition-all"
-                    >
-                      <button
-                        onClick={() => setSelectedDiff(change)}
-                        className="flex-1 text-left flex flex-col transition-colors text-[11px] font-mono cursor-pointer border-none bg-transparent truncate"
-                      >
-                        <span className="text-zinc-750 font-bold truncate block" title={change.file}>
-                          {change.file.split('/').pop()}
-                        </span>
-                        <span className="text-[9px] text-zinc-400 mt-0.5 flex gap-1.5">
-                          {change.additions > 0 && <span className="text-emerald-600 font-bold">+{change.additions}</span>}
-                          {change.deletions > 0 && <span className="text-rose-600 font-bold">-{change.deletions}</span>}
-                          {change.additions === 0 && change.deletions === 0 && <span className="text-zinc-400">chưa thay đổi</span>}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleRollback(change.file)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 text-red-500 rounded-lg text-xs border-none bg-transparent cursor-pointer transition-opacity"
-                        title={`Khôi phục tệp ${change.file.split('/').pop()} về nguyên trạng`}
-                      >
-                        ↩️
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SidebarShadowChanges
+              shadowChanges={shadowChanges}
+              onViewDiff={(change) => setSelectedDiff(change)}
+              onRollback={handleRollback}
+            />
           </div>
 
           <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30 shrink-0">
@@ -453,6 +510,7 @@ export default function App() {
           </div>
         </aside>
 
+        {/* WORKSPACE CHÍNH */}
         <main className="flex-1 flex flex-col bg-white overflow-hidden h-full relative">
           {activeTab === "flow" ? (
             <VisualFlow
@@ -463,6 +521,30 @@ export default function App() {
               workspaceData={workspaceData}
               onViewDiff={handleViewDiffByPath}
             />
+          ) : activeTab === "builder" ? (
+            <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
+              <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
+                <div>
+                  <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>📐</span> Graph Builder
+                  </h2>
+                  <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Thiết kế, biên tập, kết nối dây và Deploy nóng Agent không cần viết code</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab("flow")}
+                  className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold font-sans"
+                >
+                  ← Trở lại sơ đồ chạy Live
+                </button>
+              </header>
+
+              <div className="flex-1 overflow-hidden p-6 bg-zinc-50/10 h-full w-full">
+                <GraphBuilder
+                  onSaveSuccess={() => setReloadTrigger((prev) => prev + 1)}
+                  editConfig={editHarnessConfig}
+                />
+              </div>
+            </div>
           ) : activeTab === "traces" ? (
             <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
               <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
@@ -474,9 +556,9 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => setActiveTab("flow")}
-                  className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
+                  className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold font-sans"
                 >
-                  ← Trở lại sơ đồ Node
+                  ← Trở lại sơ đồ chạy Live
                 </button>
               </header>
 
@@ -503,9 +585,9 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => setActiveTab("flow")}
-                    className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold"
+                    className="text-xs text-blue-600 hover:underline cursor-pointer border-none bg-transparent font-semibold font-sans"
                   >
-                    ← Trở lại sơ đồ Node
+                    ← Trở lại sơ đồ chạy Live
                   </button>
                 </div>
 
@@ -519,136 +601,24 @@ export default function App() {
         </main>
       </div>
 
-      {/* SHADOW FILES INTERACTIVE DIFF MODAL (LIGHTBOX) */}
       {selectedDiff && (
-        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 select-text">
-          <div className="bg-white border border-zinc-200 rounded-2xl w-full max-w-4xl h-[80vh] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-fade-in text-zinc-800">
+        <DiffLightbox
+          selectedDiff={selectedDiff}
+          diffMode={diffMode}
+          onClose={() => setSelectedDiff(null)}
+          onChangeDiffMode={(mode) => setDiffMode(mode)}
+          highlightCodeLine={highlightCodeLine}
+        />
+      )}
 
-            <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center select-none shrink-0">
-              <div className="text-left max-w-[50%]">
-                <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>📊</span> So sánh chi tiết tệp Sandbox
-                </h3>
-                <p className="text-[10px] text-zinc-400 font-mono mt-0.5 truncate" title={selectedDiff.absolute_path}>
-                  {selectedDiff.absolute_path}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center bg-zinc-100 rounded-lg border border-zinc-200 p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setDiffMode('latest')}
-                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${diffMode === 'latest'
-                      ? 'bg-white text-zinc-800 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-600'
-                      }`}
-                  >
-                    Lần sửa gần nhất
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDiffMode('cumulative')}
-                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${diffMode === 'cumulative'
-                      ? 'bg-white text-zinc-800 shadow-xs'
-                      : 'text-zinc-400 hover:text-zinc-600'
-                      }`}
-                  >
-                    Lũy kế phiên
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setSelectedDiff(null)}
-                  className="px-3.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 cursor-pointer transition-colors"
-                >
-                  Đóng [Esc]
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto p-6 bg-zinc-900 text-zinc-100 font-mono text-sm leading-relaxed text-left">
-              {(() => {
-                const targetDiff = diffMode === 'latest'
-                  ? (selectedDiff.latest_diff || selectedDiff.diff)
-                  : selectedDiff.diff;
-
-                if (!targetDiff) {
-                  return (
-                    <div className="text-zinc-400 italic text-center py-20">
-                      Không phát hiện thay đổi nào thuộc chế độ xem này.
-                    </div>
-                  );
-                }
-
-                const allLines = targetDiff.split('\n');
-                const changeIndices: number[] = [];
-
-                allLines.forEach((line, idx) => {
-                  const isAdd = line.startsWith('+') && !line.startsWith('+++');
-                  const isDel = line.startsWith('-') && !line.startsWith('---');
-                  if (isAdd || isDel) {
-                    changeIndices.push(idx);
-                  }
-                });
-
-                const visibleIndices = new Set<number>();
-                const CONTEXT_SIZE = 3;
-
-                changeIndices.forEach(changeIdx => {
-                  for (let i = Math.max(0, changeIdx - CONTEXT_SIZE); i <= Math.min(allLines.length - 1, changeIdx + CONTEXT_SIZE); i++) {
-                    visibleIndices.add(i);
-                  }
-                });
-
-                const renderLines: any[] = [];
-                let prevVisibleIdx = -10;
-
-                Array.from(visibleIndices).sort((a, b) => a - b).forEach((idx) => {
-                  if (idx - prevVisibleIdx > 1) {
-                    renderLines.push(
-                      <div key={`ellipsis-${idx}`} className="py-1 px-3 text-zinc-500 text-xs select-none">
-                        ... ({idx - prevVisibleIdx - 1} dòng không thay đổi đã được ẩn)
-                      </div>
-                    );
-                  }
-
-                  const line = allLines[idx];
-                  const isAdd = line.startsWith('+') && !line.startsWith('+++');
-                  const isDel = line.startsWith('-') && !line.startsWith('---');
-
-                  let colorClass = "text-zinc-500 opacity-80";
-                  let bgClass = "pl-3";
-
-                  if (isAdd) {
-                    colorClass = "text-emerald-400 font-semibold diff-line-add";
-                    bgClass = "bg-emerald-950/45 border-l-2 border-emerald-500 pl-3";
-                  } else if (isDel) {
-                    colorClass = "text-rose-400 font-semibold diff-line-del";
-                    bgClass = "bg-rose-950/45 border-l-2 border-rose-500 pl-3";
-                  } else {
-                    bgClass = "pl-3 opacity-80";
-                  }
-
-                  const codeContent = (isAdd || isDel) ? line.substring(1) : line;
-                  const highlightedHtml = highlightCodeLine(codeContent);
-
-                  renderLines.push(
-                    <div key={idx} className={`whitespace-pre py-0.5 leading-normal ${bgClass} ${colorClass}`}>
-                      {isAdd && <span className="text-emerald-500 font-bold mr-1 select-none">+ </span>}
-                      {isDel && <span className="text-rose-500 font-bold mr-1 select-none">- </span>}
-                      <span dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
-                    </div>
-                  );
-
-                  prevVisibleIdx = idx;
-                });
-
-                return <div className="font-mono space-y-0.5">{renderLines}</div>;
-              })()}
-            </div>
-          </div>
-        </div>
+      {runningHarnessId && (
+        <HarnessRunModal
+          harnessId={runningHarnessId}
+          harnessName={harnesses.find(h => h.id === runningHarnessId)?.harness_name || ""}
+          triggering={triggering}
+          onSubmit={handleTriggerHarnessRun}
+          onClose={() => setRunningHarnessId(null)}
+        />
       )}
     </div>
   );

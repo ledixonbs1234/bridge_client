@@ -1,9 +1,8 @@
-// filepath: ridge_client/src/hooks/useSSE.ts
+// filepath: bridge_client/src/hooks/useSSE.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ExecutionStep {
   id: string;
-  // Bổ sung thêm kiểu 'agent' vào cuối danh sách các kiểu hợp lệ
   type: 'thinking' | 'terminal' | 'read_file' | 'search' | 'generic' | 'agent';
   title: string;
   input?: string;
@@ -64,11 +63,11 @@ export function useSSE(onGenerationComplete?: () => void) {
             images: m.images || undefined,
             steps: m.steps || [],
             timeline: m.timeline || undefined,
-            usage: m.usage || undefined // 👈 BỔ SUNG DÒNG NÀY
+            usage: m.usage || undefined
           }));
           setMessages(loadedMessages);
 
-          setLogs((prev) => [
+          setLogs((prev: LogEntry[]) => [
             ...prev,
             {
               timestamp: new Date().toLocaleTimeString(),
@@ -80,6 +79,18 @@ export function useSSE(onGenerationComplete?: () => void) {
       }
     } catch (e) {
       console.error("Không thể khôi phục phiên chat:", e);
+    }
+
+    try {
+      const permRes = await fetch('/api/dashboard/permission/active');
+      if (permRes.ok) {
+        const permData = await permRes.json();
+        if (permData.success && permData.permission) {
+          setPendingPermission(permData.permission);
+        }
+      }
+    } catch (e) {
+      console.error("Không thể tải yêu cầu phê duyệt đang chờ:", e);
     }
   }, []);
 
@@ -100,8 +111,7 @@ export function useSSE(onGenerationComplete?: () => void) {
     setPendingPermission(null);
     abortControllerRef.current = new AbortController();
 
-    // SỬA ĐỔI CHÍNH: Khởi tạo sẵn một Assistant Message rỗng cùng lúc với tin nhắn của User
-    setMessages((prev) => [
+    setMessages((prev: ChatMessage[]) => [
       ...prev,
       { role: 'user', content: prompt, images: images || undefined },
       { role: 'assistant', content: '', steps: [], timeline: [] }
@@ -150,7 +160,7 @@ export function useSSE(onGenerationComplete?: () => void) {
             const parsed = JSON.parse(cleanLine.substring(6));
 
             if (parsed.type === 'chunk') {
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const last = prev[prev.length - 1];
                 if (last && last.role === 'assistant') {
                   const updatedTimeline = last.timeline ? [...last.timeline] : [];
@@ -210,7 +220,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                 });
               }
 
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
                   const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
@@ -281,7 +291,7 @@ export function useSSE(onGenerationComplete?: () => void) {
               });
             } else if (parsed.type === 'action') {
               const tool = parsed.tool || '';
-              let stepType: 'terminal' | 'read_file' | 'search' | 'generic' | 'agent' = 'generic';
+              let stepType: 'thinking' | 'terminal' | 'read_file' | 'search' | 'generic' | 'agent' = 'generic';
               let cleanTitle = `Execute ${tool}`;
 
               if (tool.includes('bash') || tool.includes('command') || tool.includes('run') || tool.includes('terminal')) {
@@ -306,7 +316,6 @@ export function useSSE(onGenerationComplete?: () => void) {
                 stepType = 'search';
                 cleanTitle = `Search ${parsed.input || parsed.pattern || 'query'}`;
               } else if (parsed.step_id && parsed.step_id.startsWith('worker_')) {
-                // Hỗ trợ đồng bộ hóa kiểu dữ liệu Worker Agent ngầm
                 stepType = 'agent';
                 cleanTitle = parsed.tool || 'Worker Agent';
               }
@@ -321,7 +330,7 @@ export function useSSE(onGenerationComplete?: () => void) {
 
               currentSteps.push(newStep);
 
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
                   const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
@@ -367,17 +376,18 @@ export function useSSE(onGenerationComplete?: () => void) {
             } else if (parsed.type === 'tool_output') {
               const parsedOutput = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
 
-              const targetStep = currentSteps.find(s => s.id === parsed.step_id);
+              // Định nghĩa kiểu rõ ràng cho tham số 's' để tránh lỗi implicit any
+              const targetStep = currentSteps.find((s: ExecutionStep) => s.id === parsed.step_id);
               if (targetStep) {
                 targetStep.output = parsedOutput;
               } else {
-                const lastNonThinking = [...currentSteps].reverse().find(s => s.type !== 'thinking');
+                const lastNonThinking = [...currentSteps].reverse().find((s: ExecutionStep) => s.type !== 'thinking');
                 if (lastNonThinking) {
                   lastNonThinking.output = parsedOutput;
                 }
               }
 
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
                   const updatedTimeline = lastMsg.timeline ? [...lastMsg.timeline] : [];
@@ -386,7 +396,7 @@ export function useSSE(onGenerationComplete?: () => void) {
                   for (let i = 0; i < updatedTimeline.length; i++) {
                     const item = updatedTimeline[i];
                     if (item.type === 'steps' && item.steps) {
-                      const stepIdx = item.steps.findIndex(s => s.id === parsed.step_id);
+                      const stepIdx = item.steps.findIndex((s: ExecutionStep) => s.id === parsed.step_id);
                       if (stepIdx !== -1) {
                         const newSteps = [...item.steps];
                         newSteps[stepIdx] = {
@@ -404,12 +414,12 @@ export function useSSE(onGenerationComplete?: () => void) {
                   }
 
                   if (!updated) {
-                    const lastTimelineStepsIdx = updatedTimeline.map(item => item.type === 'steps').lastIndexOf(true);
+                    const lastTimelineStepsIdx = updatedTimeline.map((item: TimelineItem) => item.type === 'steps').lastIndexOf(true);
                     if (lastTimelineStepsIdx !== -1) {
                       const item = updatedTimeline[lastTimelineStepsIdx];
                       if (item.steps && item.steps.length > 0) {
                         const newSteps = [...item.steps];
-                        const lastNonThinkingIdx = newSteps.map(s => s.type !== 'thinking').lastIndexOf(true);
+                        const lastNonThinkingIdx = newSteps.map((s: ExecutionStep) => s.type !== 'thinking').lastIndexOf(true);
                         if (lastNonThinkingIdx !== -1) {
                           newSteps[lastNonThinkingIdx] = {
                             ...newSteps[lastNonThinkingIdx],
@@ -434,6 +444,12 @@ export function useSSE(onGenerationComplete?: () => void) {
                   ];
                 }
                 return prev;
+              });
+            } else if (parsed.type === 'ask_permission') {
+              setPendingPermission({
+                id: parsed.id,
+                query: parsed.query,
+                details: parsed.details
               });
             } else if (parsed.type === 'done') {
               if (parsed.history) {

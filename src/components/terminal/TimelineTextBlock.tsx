@@ -6,6 +6,7 @@ import { MermaidRenderer } from "../MermaidRenderer";
 
 interface TimelineTextBlockProps {
     content: string;
+    theme?: 'light' | 'dark'; // Thêm cấu hình hỗ trợ theme
 }
 
 interface ParsedPart {
@@ -37,7 +38,7 @@ function parseContentAndMermaid(content: string) {
     return parts;
 }
 
-export const TimelineTextBlock = React.memo(function TimelineTextBlock({ content }: TimelineTextBlockProps) {
+export const TimelineTextBlock = React.memo(function TimelineTextBlock({ content, theme = 'light' }: TimelineTextBlockProps) {
     const cleanContent = useMemo(() => {
         return content
             .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
@@ -57,6 +58,9 @@ export const TimelineTextBlock = React.memo(function TimelineTextBlock({ content
         });
     }, [cleanContent]);
 
+    // Chọn class CSS markdown bám sát theme hiện hành
+    const bodyClass = theme === 'dark' ? 'markdown-body-dark' : 'markdown-body-light';
+
     return (
         <div className="space-y-3.5 text-left">
             {parsedParts.map((part, partIdx) => {
@@ -70,7 +74,7 @@ export const TimelineTextBlock = React.memo(function TimelineTextBlock({ content
                 return (
                     <div
                         key={partIdx}
-                        className="markdown-body-light text-left leading-relaxed text-[15px] select-text"
+                        className={`${bodyClass} text-left leading-relaxed text-[15px] select-text`}
                         dangerouslySetInnerHTML={{ __html: part.html || '' }}
                     />
                 );

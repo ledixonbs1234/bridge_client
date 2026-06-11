@@ -264,7 +264,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <button
                             type="button"
-                            className="w-6 h-6 rounded-md border border-zinc-200 bg-white text-zinc-500 hover:text-zinc-800 flex items-center justify-center font-semibold text-xs cursor-pointer transition-colors shadow-xs animate-none"
+                            className="w-8 h-8 rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:text-zinc-800 flex items-center justify-center font-semibold text-sm cursor-pointer transition-colors shadow-xs animate-none"
                             title="Thêm tệp đính kèm"
                         >
                             +
@@ -274,18 +274,18 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                             <button
                                 type="button"
                                 onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="flex items-center gap-1 bg-white border border-zinc-200 hover:border-zinc-300 rounded-md px-2 py-0.5 shadow-xs transition-[border-color,background-color] duration-200 cursor-pointer select-none"
+                                className="flex items-center h-8 gap-1.5 bg-white border border-zinc-200 hover:border-zinc-300 rounded-lg px-2.5 shadow-xs transition-[border-color,background-color] duration-200 cursor-pointer select-none"
                             >
-                                <span className="text-[10px]">
+                                <span className="text-xs">
                                     {activeAgent === "MaxHermes" ? "🤖" : "👾"}
                                 </span>
-                                <span className="text-[9px] font-bold text-zinc-700 font-mono">
+                                <span className="text-[10px] font-bold text-zinc-700 font-mono">
                                     {activeAgent}
                                 </span>
-                                <span className="text-[8px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1">
+                                <span className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5">
                                     {currentActiveModelName}
                                 </span>
-                                <span className="text-[7px] text-zinc-400">▼</span>
+                                <span className="text-[8px] text-zinc-400">▼</span>
                             </button>
 
                             {showModelDropdown && (
@@ -313,7 +313,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                         <button
                             type="button"
                             onClick={() => setUseReformulate(!useReformulate)}
-                            className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono border transition-all cursor-pointer select-none ${useReformulate
+                            className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${useReformulate
                                 ? "bg-blue-50 border-blue-200 text-blue-600"
                                 : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
                                 }`}
@@ -325,7 +325,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                         <button
                             type="button"
                             onClick={() => setUseHeadless(!useHeadless)}
-                            className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono border transition-all cursor-pointer select-none ${useHeadless
+                            className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${useHeadless
                                 ? "bg-indigo-50 border-indigo-200 text-indigo-600"
                                 : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
                                 }`}
@@ -333,6 +333,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                         >
                             ⚡ Headless: {useHeadless ? "ON" : "OFF"}
                         </button>
+
                         <button
                             type="button"
                             onClick={() => {
@@ -342,11 +343,11 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                                     return 'default';
                                 });
                             }}
-                            className={`px-1.5 py-0.5 rounded text-[8px] font-bold font-mono border transition-all cursor-pointer select-none ${chatMode === 'thinking'
-                                    ? "bg-purple-50 border-purple-200 text-purple-600"
-                                    : chatMode === 'fast'
-                                        ? "bg-amber-50 border-amber-200 text-amber-600"
-                                        : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
+                            className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${chatMode === 'thinking'
+                                ? "bg-purple-50 border-purple-200 text-purple-600"
+                                : chatMode === 'fast'
+                                    ? "bg-amber-50 border-amber-200 text-amber-600"
+                                    : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
                                 }`}
                             title="Chế độ hoạt động của Agent: Auto (Tự động) / Thinking (Suy nghĩ sâu) / Fast (Xử lý nhanh)"
                         >
@@ -357,7 +358,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                     <button
                         type="submit"
                         onClick={isGenerating ? stopGeneration : undefined}
-                        className={`h-6 w-6 rounded-full flex items-center justify-center text-white font-bold p-0 cursor-pointer shadow-sm transition-transform duration-200 active:scale-95 hover:scale-105 ${isGenerating ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
+                        className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm p-0 cursor-pointer shadow-sm transition-transform duration-200 active:scale-95 hover:scale-105 ${isGenerating ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
                             }`}
                         title={isGenerating ? "Dừng phản hồi" : "Gửi tin nhắn"}
                     >
