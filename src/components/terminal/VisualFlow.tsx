@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/components/terminal/VisualFlow.tsx
+// filepath: ridge_client/src/components/terminal/VisualFlow.tsx
 import * as React from "react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import ReactFlow, {
@@ -6,13 +6,15 @@ import ReactFlow, {
     Controls,
     MiniMap,
     Node,
+    Edge,
     useNodesState,
     useEdgesState,
     ReactFlowProvider,
-    useReactFlow
+    useReactFlow,
+    MarkerType
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { useSSE, ChatMessage } from "../../hooks/useSSE";
+import { useSSE, ChatMessage, TimelineItem } from "../../hooks/useSSE";
 import { ChatInputForm } from "./ChatInputForm";
 import { WorkspaceData } from "../../App";
 import { AnimatePresence } from "motion/react";
@@ -20,7 +22,7 @@ import { marked } from "marked";
 import { StructuredQuestionsForm } from "./StructuredQuestionsForm";
 import { TimelineTextBlock } from "./TimelineTextBlock";
 
-// Nhập khẩu các Custom Nodes từ thư mục nodes/
+// Nhập khẩu các Custom Nodes chất lượng cao từ thư mục nodes/
 import {
     CyberGroupNode,
     CyberUserNode,
@@ -71,6 +73,7 @@ function VisualFlowInner({
     const { fitView, setCenter, getZoom } = useReactFlow();
     const isFirstLoad = useRef(true);
     const wasGeneratingRef = useRef(false);
+
     const [viewMode, setViewMode] = useState<'full' | 'active'>(() => {
         try {
             const saved = localStorage.getItem('bridge_flow_view_mode');
@@ -229,6 +232,7 @@ function VisualFlowInner({
         e.currentTarget.releasePointerCapture(e.pointerId);
     };
 
+    // ĐỒNG BỘ ĐỒ THỊ KHI ĐANG CHẠY THỜI GIAN THỰC
     useEffect(() => {
         if (!workspaceData) return;
 
@@ -349,13 +353,31 @@ function VisualFlowInner({
             });
         }
 
+        // STEP 1: UPGRADED EDGE ROUTING VISUALIZATION IN REAL-TIME
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
             const dbSourceState = currentStepMap.find(s => s.step_key === nodeName);
 
-            const addEdgeHelper = (targetNodeName: string) => {
+            const addEdgeHelper = (targetNodeName: string, pathType: "success" | "failure" | "default" = "default") => {
                 const dbTargetState = currentStepMap.find(s => s.step_key === targetNodeName);
                 const isEdgeActive = (dbSourceState?.state === 'DONE' && dbTargetState?.state === 'RUNNING') ||
-                    (dbSourceState?.state === 'RUNNING');
+                    (dbSourceState?.state === 'RUNNING' && runningStepKey === targetNodeName);
+
+                // Thiết lập kiểu dáng dây nối rực rỡ bám sát theo nhãn và trạng thái chạy Live
+                let strokeColor = theme === 'dark' ? '#27272a' : '#d4d4d8';
+                let strokeDash = undefined;
+                let label = "";
+
+                if (pathType === "success") {
+                    strokeColor = '#10b981'; // Emerald
+                    strokeDash = "4,4";
+                    label = "✓ Success";
+                } else if (pathType === "failure") {
+                    strokeColor = '#ef4444'; // Rose
+                    strokeDash = "4,4";
+                    label = "✗ Failure";
+                } else if (isEdgeActive) {
+                    strokeColor = theme === 'dark' ? '#ff007f' : '#c026d3';
+                }
 
                 edgesList.push({
                     id: `edge-flow-${nodeName}-${targetNodeName}`,
@@ -363,19 +385,22 @@ function VisualFlowInner({
                     target: targetNodeName,
                     type: 'smoothstep',
                     animated: isEdgeActive,
+                    label,
+                    labelStyle: { fill: strokeColor, fontWeight: 700, fontSize: 8 },
+                    labelBgStyle: { fill: theme === 'dark' ? '#05050c' : '#ffffff', fillOpacity: 0.85, rx: 4 },
                     style: {
-                        stroke: isEdgeActive
-                            ? (theme === 'dark' ? '#ff007f' : '#c026d3')
-                            : (theme === 'dark' ? '#27272a' : '#d4d4d8'),
+                        stroke: strokeColor,
                         strokeWidth: isEdgeActive ? 2.5 : 1.5,
-                        filter: (isEdgeActive && theme === 'dark') ? 'drop-shadow(0 0 4px #ff007f)' : undefined
-                    }
+                        strokeDasharray: strokeDash,
+                        filter: (isEdgeActive && theme === 'dark') ? `drop-shadow(0 0 4px ${strokeColor})` : undefined
+                    },
+                    markerEnd: { type: MarkerType.ArrowClosed }
                 });
             };
 
             if (nodeVal.next) addEdgeHelper(nodeVal.next);
-            if (nodeVal.next_on_success) addEdgeHelper(nodeVal.next_on_success);
-            if (nodeVal.next_on_failure) addEdgeHelper(nodeVal.next_on_failure);
+            if (nodeVal.next_on_success) addEdgeHelper(nodeVal.next_on_success, "success");
+            if (nodeVal.next_on_failure) addEdgeHelper(nodeVal.next_on_failure, "failure");
         });
 
         if (workspaceData.activeTask && runningStepKey) {
@@ -717,7 +742,7 @@ function VisualFlowInner({
 
                                 {selectedNode.type === 'cyberAgent' && (
                                     <div className="space-y-4">
-                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
+                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-655'
                                             }`}>
                                             <div>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>
                                             <div>• Model: <span className="font-bold" style={{ color: theme === 'dark' ? '#60a5fa' : '#2563eb' }}>{selectedNode.data.model}</span></div>
@@ -741,7 +766,7 @@ function VisualFlowInner({
 
                                 {selectedNode.type === 'cyberTool' && (
                                     <div className="space-y-4">
-                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'
+                                        <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-655'
                                             }`}>
                                             <div>• Tool: <span className="font-bold" style={{ color: theme === 'dark' ? '#f97316' : '#ea580c' }}>{selectedNode.data.tool}</span></div>
                                             <div>• Task Description: <span className="font-semibold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.title}</span></div>
@@ -922,7 +947,7 @@ function VisualFlowInner({
 
                                 {selectedNode.type === 'cyberValidator' && (
                                     <div className="space-y-4">
-                                        <div className={`text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-650'}`}>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>
+                                        <div className={`text-xs font-mono transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-655'}`}>• Name: <span className="font-bold" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{selectedNode.data.name}</span></div>
                                         <div className="space-y-1">
                                             <div className="text-xs font-bold select-none font-mono text-pink-500">🛡️ VERDICT ANALYSIS:</div>
                                             <div className={`p-4 border rounded-xl text-xs font-sans select-text leading-relaxed whitespace-pre-wrap transition-colors ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-200' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
