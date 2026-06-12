@@ -9,9 +9,13 @@ import ReactFlow, {
     Edge,
     useNodesState,
     useEdgesState,
+    addEdge,
+    Connection,
+    MarkerType,
+    Handle,
+    Position,
     ReactFlowProvider,
-    useReactFlow,
-    MarkerType
+    useReactFlow
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { useSSE, ChatMessage, TimelineItem } from "../../hooks/useSSE";
@@ -46,6 +50,8 @@ interface VisualFlowProps {
     sse: ReturnType<typeof useSSE>;
     workspaceData: WorkspaceData | null;
     onViewDiff?: (filePath: string) => void;
+    theme: "light" | "dark";
+    setTheme: React.Dispatch<React.SetStateAction<"light" | "dark">>;
 }
 
 export function VisualFlow(props: VisualFlowProps) {
@@ -62,7 +68,9 @@ function VisualFlowInner({
     setActiveModel,
     sse,
     workspaceData,
-    onViewDiff
+    onViewDiff,
+    theme,
+    setTheme
 }: VisualFlowProps) {
     const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration } = sse;
 
@@ -80,15 +88,6 @@ function VisualFlowInner({
             return (saved === 'full' || saved === 'active') ? saved : 'full';
         } catch {
             return 'full';
-        }
-    });
-
-    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-        try {
-            const saved = localStorage.getItem('bridge_flow_theme');
-            return (saved === 'light' || saved === 'dark') ? saved : 'dark';
-        } catch {
-            return 'dark';
         }
     });
 
@@ -118,26 +117,6 @@ function VisualFlowInner({
             return true;
         }
     });
-
-    useEffect(() => {
-        localStorage.setItem('bridge_flow_theme', theme);
-    }, [theme]);
-
-    useEffect(() => {
-        localStorage.setItem('bridge_flow_view_mode', viewMode);
-    }, [viewMode]);
-
-    useEffect(() => {
-        localStorage.setItem('bridge_response_panel_width', panelWidth.toString());
-    }, [panelWidth]);
-
-    useEffect(() => {
-        localStorage.setItem('bridge_response_panel_height', panelHeight.toString());
-    }, [panelHeight]);
-
-    useEffect(() => {
-        localStorage.setItem('bridge_show_response_panel', JSON.stringify(showResponsePanel));
-    }, [showResponsePanel]);
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -242,12 +221,7 @@ function VisualFlowInner({
         const currentStepMap = workspaceData.states || [];
         const runningStepKey = workspaceData.activeTask?.step_key || '';
 
-        const harnessNodesConfig = workspaceData.harness_config?.nodes || {
-            "planner": { "type": "agent", "next": "coder" },
-            "coder": { "type": "agent", "next": "validator" },
-            "validator": { "type": "validator", "next_on_success": "end", "next_on_failure": "healer" },
-            "healer": { "type": "agent", "next": "coder" }
-        };
+        const harnessNodesConfig = workspaceData.harness_config?.nodes || {};
         const initialNode = workspaceData.harness_config?.initial_node || "planner";
 
         const layoutNodePositions = (nodesConfig: any, startNode: string) => {
@@ -353,7 +327,6 @@ function VisualFlowInner({
             });
         }
 
-        // STEP 1: UPGRADED EDGE ROUTING VISUALIZATION IN REAL-TIME
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
             const dbSourceState = currentStepMap.find(s => s.step_key === nodeName);
 
@@ -362,7 +335,6 @@ function VisualFlowInner({
                 const isEdgeActive = (dbSourceState?.state === 'DONE' && dbTargetState?.state === 'RUNNING') ||
                     (dbSourceState?.state === 'RUNNING' && runningStepKey === targetNodeName);
 
-                // Thiết lập kiểu dáng dây nối rực rỡ bám sát theo nhãn và trạng thái chạy Live
                 let strokeColor = theme === 'dark' ? '#27272a' : '#d4d4d8';
                 let strokeDash = undefined;
                 let label = "";
@@ -827,7 +799,7 @@ function VisualFlowInner({
                                                         <div className="space-y-1">
                                                             <div className="text-[10px] font-bold text-teal-400 select-none">📝 FILE CONTENT:</div>
                                                             <pre className={`p-3 border rounded text-xs font-mono max-h-40 overflow-auto whitespace-pre select-text leading-normal transition-colors ${theme === 'dark'
-                                                                ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                                                                ? 'bg-zinc-950 border-zinc-800 text-zinc-300'
                                                                 : 'bg-zinc-50 border-zinc-200 text-zinc-800'
                                                                 }`}>
                                                                 {content}

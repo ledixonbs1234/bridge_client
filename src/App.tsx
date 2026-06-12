@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/App.tsx
+// filepath: ridge_client/src/App.tsx
 import { useState, useEffect, useCallback } from "react";
 import { useSSE } from "./hooks/useSSE";
 import { VisualFlow } from "./components/terminal/VisualFlow";
@@ -125,6 +125,30 @@ export default function App() {
   const [triggering, setTriggering] = useState(false);
   const [editHarnessConfig, setEditHarnessConfig] = useState<any>(null);
 
+  // Khởi tạo theme bền vững từ localStorage
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('bridge_flow_theme');
+      return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  // STEP 1 NÂNG CẤP: Đồng bộ hóa bền vững theme lên cấp độ DOM gốc ngăn nháy trắng khi refresh
+  useEffect(() => {
+    localStorage.setItem('bridge_flow_theme', theme);
+    const root = document.documentElement;
+    const body = document.body;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      body.classList.add('bg-zinc-950');
+    } else {
+      root.classList.remove('dark');
+      body.classList.remove('bg-zinc-950');
+    }
+  }, [theme]);
+
   const sse = useSSE(() => {
     setReloadTrigger((prev) => prev + 1);
     fetchWorkspace();
@@ -248,7 +272,24 @@ export default function App() {
       .catch((err) => alert("Gặp sự cố kết nối: " + err.message))
       .finally(() => setTriggering(false));
   };
-
+  const handleActivateHarness = (harnessId: string) => {
+    fetch("/api/dashboard/harnesses/activate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ harness_id: harnessId })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setReloadTrigger((prev) => prev + 1);
+          fetchWorkspace();
+          setActiveTab("flow"); // Chuyển đổi trực tiếp sang tab Visual Flow để xem
+        } else {
+          alert("Lỗi kích hoạt sơ đồ: " + data.error);
+        }
+      })
+      .catch((err) => alert("Gặp sự cố kết nối: " + err.message));
+  };
   const handleEditHarness = (harnessId: string) => {
     fetch(`/api/dashboard/harnesses/${harnessId}`)
       .then((res) => res.json())
@@ -379,8 +420,11 @@ export default function App() {
       });
   };
 
+  const isDark = theme === "dark";
+
   return (
-    <div className="min-h-screen bg-white text-zinc-800 flex flex-col font-sans antialiased overflow-hidden h-screen select-none">
+    <div className={`min-h-screen flex flex-col font-sans antialiased overflow-hidden h-screen select-none transition-colors duration-200 ${isDark ? "bg-zinc-950 text-zinc-100 dark" : "bg-white text-zinc-800"
+      }`}>
       {!isServerConnected && (
         <div className="bg-red-600 text-white text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-2 z-[9999] shadow-md shrink-0">
           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -390,12 +434,15 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden h-full">
         {/* SIDEBAR TRÁI */}
-        <aside className="w-60 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-between shrink-0 h-full text-zinc-700 overflow-y-auto">
+        <aside className={`w-60 border-r flex flex-col justify-between shrink-0 h-full overflow-y-auto transition-colors duration-200 ${isDark
+          ? "bg-zinc-900 border-zinc-800 text-zinc-300"
+          : "bg-zinc-50 border-zinc-200 text-zinc-700"
+          }`}>
           <div className="p-4 space-y-6">
             <div className="flex items-center gap-2 px-1">
               <span className="text-blue-600 font-bold text-lg animate-pulse">⚡</span>
               <div>
-                <h1 className="text-xs font-bold text-zinc-900 tracking-wide uppercase">Bridge Server</h1>
+                <h1 className={`text-xs font-bold tracking-wide uppercase ${isDark ? "text-zinc-100" : "text-zinc-900"}`}>Bridge Server</h1>
                 <p className="text-[9px] text-zinc-400 font-medium">Intelligence Layer</p>
               </div>
             </div>
@@ -405,74 +452,53 @@ export default function App() {
                 setEditHarnessConfig(null);
                 setActiveTab("flow");
               }}
-              className="flex items-center justify-center gap-2 w-full border border-zinc-200 hover:bg-zinc-100 text-zinc-800 text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer"
+              className={`flex items-center justify-center gap-2 w-full border text-xs font-semibold py-2 px-3 rounded-lg transition-colors cursor-pointer ${isDark
+                ? "border-zinc-800 bg-zinc-950 text-zinc-200 hover:bg-zinc-800"
+                : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-100"
+                }`}
             >
               <span className="text-sm font-bold">+</span> Trò chuyện mới
             </button>
 
             <nav className="space-y-1">
-              <button
-                onClick={() => setActiveTab("flow")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "flow" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">🌐</span> Visual Flow
-              </button>
-
-              <button
-                onClick={() => {
-                  setEditHarnessConfig(null);
-                  setActiveTab("builder")
-                }
-                }
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "builder" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">📐</span> Graph Builder
-              </button>
-
-              <button
-                onClick={() => setActiveTab("traces")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "traces" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">🔍</span> Search Traces
-              </button>
-              <button
-                onClick={() => setActiveTab("telemetry")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telemetry" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">📊</span> Skills Telemetry
-              </button>
-              <button
-                onClick={() => setActiveTab("memory")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "memory" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">🧠</span> FluxMem Assets
-              </button>
-              <button
-                onClick={() => setActiveTab("sandbox")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "sandbox" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">🛡️</span> Shadow Files
-              </button>
-              <button
-                onClick={() => setActiveTab("telegram")}
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === "telegram" ? "bg-zinc-200/80 text-zinc-900 font-semibold" : "text-zinc-650 hover:bg-zinc-200/40 hover:text-zinc-900"}`}
-              >
-                <span className="text-sm">✈️</span> Connect Mobile
-              </button>
+              {[
+                { tab: "flow" as TabPanel, label: "Visual Flow", icon: "🌐" },
+                { tab: "builder" as TabPanel, label: "Graph Builder", icon: "📐" },
+                { tab: "traces" as TabPanel, label: "Search Traces", icon: "🔍" },
+                { tab: "telemetry" as TabPanel, label: "Skills Telemetry", icon: "📊" },
+                { tab: "memory" as TabPanel, label: "FluxMem Assets", icon: "🧠" },
+                { tab: "sandbox" as TabPanel, label: "Shadow Files", icon: "🛡️" },
+                { tab: "telegram" as TabPanel, label: "Connect Mobile", icon: "✈️" }
+              ].map((item) => (
+                <button
+                  key={item.tab}
+                  onClick={() => {
+                    if (item.tab !== "builder") setEditHarnessConfig(null);
+                    setActiveTab(item.tab);
+                  }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${activeTab === item.tab
+                    ? (isDark ? "bg-zinc-800 text-white font-semibold" : "bg-zinc-200/80 text-zinc-900 font-semibold")
+                    : (isDark ? "text-zinc-400 hover:bg-zinc-800/40 hover:text-white" : "text-zinc-655 hover:bg-zinc-200/40 hover:text-zinc-900")
+                    }`}
+                >
+                  <span className="text-sm">{item.icon}</span> {item.label}
+                </button>
+              ))}
             </nav>
 
             <div className="space-y-1.5">
               <span className="px-3 text-[10px] uppercase tracking-wider font-bold text-zinc-400 block">Current Goal</span>
-              <div className="px-3 py-2 bg-white border border-zinc-200 rounded-xl space-y-2">
-                <p className="text-[11px] text-zinc-700 leading-normal line-clamp-3 select-text font-medium">
+              <div className={`px-3 py-2 border rounded-xl space-y-2 transition-colors ${isDark ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200"
+                }`}>
+                <p className={`text-[11px] leading-normal line-clamp-3 select-text font-medium ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
                   {goal || "Chưa thiết lập mục tiêu hiện tại."}
                 </p>
                 <div className="flex gap-1.5 pt-1">
-                  <button onClick={handleEditGoal} className="text-[9px] text-blue-600 hover:text-blue-500 font-bold cursor-pointer border-none bg-transparent">
+                  <button onClick={handleEditGoal} className="text-[9px] text-blue-500 hover:underline font-bold cursor-pointer border-none bg-transparent">
                     Sửa
                   </button>
                   {goal && (
-                    <button onClick={handleClearGoal} className="text-[9px] text-red-600 hover:text-red-500 font-bold cursor-pointer border-none bg-transparent">
+                    <button onClick={handleClearGoal} className="text-[9px] text-red-500 hover:underline font-bold cursor-pointer border-none bg-transparent">
                       Xóa
                     </button>
                   )}
@@ -482,7 +508,7 @@ export default function App() {
 
             <SidebarHarnessList
               harnesses={harnesses}
-              onRun={(id) => setRunningHarnessId(id)}
+              onRun={handleActivateHarness}
               onEdit={handleEditHarness}
               onDelete={handleDeleteHarness}
             />
@@ -494,13 +520,14 @@ export default function App() {
             />
           </div>
 
-          <div className="p-4 border-t border-zinc-200 flex items-center justify-between select-none bg-zinc-100/30 shrink-0">
+          <div className={`p-4 border-t flex items-center justify-between select-none shrink-0 transition-colors ${isDark ? "border-zinc-800 bg-zinc-950/20" : "border-zinc-200 bg-zinc-100/30"
+            }`}>
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold text-xs border border-blue-500/10">
+              <div className="w-7 h-7 rounded-full bg-blue-600/10 text-blue-500 flex items-center justify-center font-bold text-xs border border-blue-500/10">
                 XL
               </div>
               <div className="text-left">
-                <p className="text-xs font-bold text-zinc-800 leading-none">Xơn Lê</p>
+                <p className={`text-xs font-bold leading-none ${isDark ? "text-zinc-200" : "text-zinc-800"}`}>Xơn Lê</p>
                 <p className="text-[10px] text-zinc-400 font-medium mt-1">Administrator</p>
               </div>
             </div>
@@ -520,12 +547,16 @@ export default function App() {
               sse={sse}
               workspaceData={workspaceData}
               onViewDiff={handleViewDiffByPath}
+              theme={theme}
+              setTheme={setTheme}
             />
           ) : activeTab === "builder" ? (
-            <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
-              <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
+            <div className={`flex-1 flex flex-col overflow-hidden h-full border-l transition-colors duration-200 ${isDark ? "bg-[#05050c] text-zinc-200 border-zinc-800" : "bg-white text-zinc-800 border-zinc-200"
+              }`}>
+              <header className={`px-6 py-4 border-b flex justify-between items-center select-none shrink-0 transition-colors duration-200 ${isDark ? "bg-zinc-900/60 border-zinc-850" : "bg-zinc-50 border-zinc-200"
+                }`}>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                  <h2 className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-zinc-100" : "text-zinc-900"}`}>
                     <span>📐</span> Graph Builder
                   </h2>
                   <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Thiết kế, biên tập, kết nối dây và Deploy nóng Agent không cần viết code</p>
@@ -538,18 +569,22 @@ export default function App() {
                 </button>
               </header>
 
-              <div className="flex-1 overflow-hidden p-6 bg-zinc-50/10 h-full w-full">
+              <div className="flex-1 overflow-hidden p-6 h-full w-full">
+                {/* ĐỒNG BỘ: Truyền biến theme vào GraphBuilder */}
                 <GraphBuilder
                   onSaveSuccess={() => setReloadTrigger((prev) => prev + 1)}
                   editConfig={editHarnessConfig}
+                  theme={theme}
                 />
               </div>
             </div>
           ) : activeTab === "traces" ? (
-            <div className="flex-1 flex flex-col overflow-hidden h-full bg-white text-zinc-800 border-l border-zinc-200 animate-fade-in">
-              <header className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50 select-none shrink-0">
+            <div className={`flex-1 flex flex-col overflow-hidden h-full border-l transition-colors duration-200 ${isDark ? "bg-[#05050c] text-zinc-200 border-zinc-800" : "bg-white text-zinc-800 border-zinc-200"
+              }`}>
+              <header className={`px-6 py-4 border-b flex justify-between items-center select-none shrink-0 transition-colors duration-200 ${isDark ? "bg-zinc-900/60 border-zinc-850" : "bg-zinc-50 border-zinc-200"
+                }`}>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                  <h2 className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-zinc-100" : "text-zinc-900"}`}>
                     <span>🔍</span> Trace Viewer
                   </h2>
                   <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
@@ -562,16 +597,18 @@ export default function App() {
                 </button>
               </header>
 
-              <div className="flex-1 overflow-hidden p-6 bg-zinc-50/10 h-full w-full">
-                <TraceViewer reloadTrigger={reloadTrigger} onViewDiff={handleViewDiffByPath} />
+              <div className="flex-1 overflow-hidden p-6 h-full w-full">
+                <TraceViewer reloadTrigger={reloadTrigger} onViewDiff={handleViewDiffByPath} theme={theme} />
               </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white text-zinc-800 p-8 overflow-y-auto select-text border-l border-zinc-200">
+            <div className={`flex-1 p-8 overflow-y-auto select-text border-l transition-colors duration-200 ${isDark ? "bg-[#05050c] text-zinc-250 border-zinc-800" : "bg-white text-zinc-800 border-zinc-200"
+              }`}>
               <div className="max-w-6xl mx-auto space-y-6">
-                <div className="flex justify-between items-center border-b border-zinc-200 pb-4 mb-4 select-none">
+                <div className={`flex justify-between items-center border-b pb-4 mb-4 select-none ${isDark ? "border-zinc-850" : "border-zinc-200"
+                  }`}>
                   <div>
-                    <h2 className="text-lg font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-2">
+                    <h2 className={`text-lg font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-white" : "text-zinc-800"}`}>
                       <span>⚡</span>{" "}
                       {activeTab === "telemetry"
                         ? "Telemetry Report"
@@ -591,10 +628,10 @@ export default function App() {
                   </button>
                 </div>
 
-                {activeTab === "telemetry" && <Telemetry reloadTrigger={reloadTrigger} />}
-                {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} />}
-                {activeTab === "sandbox" && <SandboxManager reloadTrigger={reloadTrigger} />}
-                {activeTab === "telegram" && <TelegramConfig />}
+                {activeTab === "telemetry" && <Telemetry reloadTrigger={reloadTrigger} theme={theme} />}
+                {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} theme={theme} />}
+                {activeTab === "sandbox" && <SandboxManager reloadTrigger={reloadTrigger} theme={theme} />}
+                {activeTab === "telegram" && <TelegramConfig theme={theme} />}
               </div>
             </div>
           )}

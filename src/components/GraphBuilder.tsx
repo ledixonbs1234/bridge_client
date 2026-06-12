@@ -32,42 +32,49 @@ interface EditableNodeData {
     target_file_key?: string;
     next_on_success?: string;
     next_on_failure?: string;
+    theme?: "light" | "dark";
 }
 
-// KHAI BÁO TƯỜNG MINH ĐỂ SỬA TRIỆT ĐỂ LỖI ts(2304)
 interface GraphBuilderProps {
     onSaveSuccess?: () => void;
     editConfig?: any;
+    theme?: "light" | "dark";
 }
 
 // =================================================================
-// 🎨 UPGRADED CUSTOM NODE RENDERERS (With active tool badges)
+// 🎨 UPGRADED CUSTOM NODE RENDERERS (With active tool badges and dark theme)
 // =================================================================
 
 const BuilderAgentNode = React.memo(({ data, selected }: any) => {
     const activeTools = data.tools || [];
+    const isDark = data.theme === 'dark';
+
+    const nodeStyle = isDark
+        ? `bg-zinc-950/90 text-blue-400 border-blue-500/50 glow-neon-cyan`
+        : `bg-white border-zinc-200 hover:border-zinc-300 text-zinc-800`;
 
     return (
-        <div className={`px-4 py-3.5 rounded-xl border text-xs font-mono shadow-md text-left transition-all min-w-[190px] max-w-[240px] bg-white relative ${selected
+        <div className={`px-4 py-3.5 rounded-xl border text-xs font-mono shadow-md text-left transition-all min-w-[190px] max-w-[240px] relative ${nodeStyle} ${selected
             ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-lg scale-[1.02]'
-            : 'border-zinc-200 hover:border-zinc-300'
+            : ''
             }`}>
             <div className="absolute top-1 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-40">
                 Agent Node
             </div>
-            <div className="border-b border-zinc-100 pb-1 mb-1.5 flex items-center gap-1.5 select-none font-bold text-zinc-800">
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none font-bold ${isDark ? "border-zinc-800 text-zinc-200" : "border-zinc-100 text-zinc-800"}`}>
                 <span>🤖</span> {data.name?.toUpperCase() || "UNNAMED"}
             </div>
             <div className="space-y-1.5 text-[10px] text-zinc-500 leading-normal">
-                <div>• Mode: <span className="font-bold text-zinc-700 bg-zinc-100 px-1 py-0.5 rounded">{data.model_mode?.toUpperCase() || "FAST"}</span></div>
+                <div>• Mode: <span className={`font-bold px-1 py-0.5 rounded ${isDark ? "bg-zinc-900 text-zinc-350" : "bg-zinc-100 text-zinc-700"}`}>{data.model_mode?.toUpperCase() || "FAST"}</span></div>
 
                 {/* Visual Active Tool Badges */}
                 <div className="space-y-1">
-                    <div>• Active Skills:</div>
+                    <div className={isDark ? "text-zinc-500" : "text-zinc-400"}>• Active Skills:</div>
                     {activeTools.length > 0 ? (
                         <div className="flex flex-wrap gap-1 mt-0.5 max-h-16 overflow-y-auto pr-0.5">
                             {activeTools.map((t: string) => (
-                                <span key={t} className="bg-blue-50 text-blue-600 px-1 py-0.2 rounded border border-blue-100 text-[8px] font-mono leading-none">
+                                <span key={t} className={`px-1.5 py-0.2 rounded border text-[8px] font-mono leading-none ${isDark ? "bg-blue-950/20 border-blue-900/60 text-blue-400" : "bg-blue-50 border-blue-100 text-blue-600"
+                                    }`}>
                                     {t}
                                 </span>
                             ))}
@@ -84,21 +91,27 @@ const BuilderAgentNode = React.memo(({ data, selected }: any) => {
 });
 
 const BuilderValidatorNode = React.memo(({ data, selected }: any) => {
+    const isDark = data.theme === 'dark';
+
+    const nodeStyle = isDark
+        ? `bg-zinc-950/90 text-emerald-400 border-emerald-500/50 glow-neon-green`
+        : `bg-white border-zinc-200 hover:border-zinc-300 text-zinc-800`;
+
     return (
-        <div className={`px-4 py-3.5 rounded-xl border text-xs font-mono shadow-md text-left transition-all min-w-[190px] max-w-[240px] bg-white relative ${selected
+        <div className={`px-4 py-3.5 rounded-xl border text-xs font-mono shadow-md text-left transition-all min-w-[190px] max-w-[240px] relative ${nodeStyle} ${selected
             ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg scale-[1.02]'
-            : 'border-zinc-200 hover:border-zinc-300'
+            : ''
             }`}>
-            <div className="absolute top-1 right-2 text-[7px] select-none uppercase tracking-widest font-black opacity-40">
+            <div className={`absolute top-1 right-2 text-[7px] select-none uppercase tracking-widest font-black ${isDark ? "text-emerald-500 opacity-80" : "opacity-40 text-zinc-500"}`}>
                 Validator
             </div>
-            <div className="border-b border-zinc-100 pb-1 mb-1.5 flex items-center gap-1.5 select-none font-bold text-zinc-855">
+            <div className={`border-b pb-1 mb-1.5 flex items-center gap-1.5 select-none font-bold ${isDark ? "border-zinc-800 text-zinc-200" : "border-zinc-100 text-zinc-800"}`}>
                 <span>🛡️</span> {data.name?.toUpperCase() || "UNNAMED"}
             </div>
             <div className="space-y-1 text-[10px] text-zinc-500 leading-normal">
-                <div className="truncate">• Target: <span className="font-semibold text-zinc-700 bg-zinc-100 px-1 py-0.5 rounded">{data.target_file_key || "target_file"}</span></div>
+                <div className="truncate">• Target: <span className={`font-semibold px-1 py-0.5 rounded ${isDark ? "bg-zinc-900 text-zinc-350" : "bg-zinc-100 text-zinc-700"}`}>{data.target_file_key || "target_file"}</span></div>
 
-                <div className="pt-1.5 mt-1 border-t border-zinc-100 flex flex-col gap-0.5 text-[8px] text-zinc-400 select-none">
+                <div className={`pt-1.5 mt-1 border-t flex flex-col gap-0.5 text-[8px] text-zinc-400 select-none ${isDark ? "border-zinc-900" : "border-zinc-100"}`}>
                     <div className="flex justify-between">
                         <span>Success path:</span>
                         <span className="text-emerald-600 font-bold">{data.next_on_success || "end"}</span>
@@ -173,7 +186,7 @@ const FSM_TEMPLATES = {
     }
 };
 
-export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
+export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: GraphBuilderProps) {
     const [harnessName, setHarnessName] = useState("custom_agent_workflow");
     const [description, setDescription] = useState("Mô tả quy trình tự động hóa...");
     const [entryPoint, setEntryPoint] = useState("planner");
@@ -189,6 +202,134 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const isDark = theme === "dark";
+    const [savedAgentTemplates, setSavedAgentTemplates] = useState<any[]>([]);
+    const [templateSaveStatus, setTemplateSaveStatus] = useState<string | null>(null);
+
+    const fetchAgentTemplates = useCallback(() => {
+        fetch('/api/dashboard/agent-templates')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setSavedAgentTemplates(data.templates || []);
+                }
+            })
+            .catch(err => console.error("Lỗi khi tải danh sách Agent mẫu:", err));
+    }, []);
+
+    useEffect(() => {
+        fetchAgentTemplates();
+    }, [fetchAgentTemplates]);
+
+    const handleSaveAsTemplate = () => {
+        if (!selectedNode) return;
+        const d = selectedNode.data;
+        setTemplateSaveStatus("⏳ Đang lưu...");
+        fetch('/api/dashboard/agent-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: d.name,
+                system_prompt: d.system_prompt,
+                tools: d.tools,
+                model_mode: d.model_mode
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setTemplateSaveStatus("✓ Đã lưu mẫu!");
+                    fetchAgentTemplates();
+                    setTimeout(() => setTemplateSaveStatus(null), 2500);
+                } else {
+                    alert("Lỗi khi lưu mẫu: " + data.error);
+                    setTemplateSaveStatus(null);
+                }
+            })
+            .catch(err => {
+                alert("Lỗi kết nối: " + err.message);
+                setTemplateSaveStatus(null);
+            });
+    };
+
+    // Hàm đồng bộ và đổi tên Node ID vật lý của ReactFlow kèm theo cập nhật lại dây nối (Edges)
+    const handleRenameNode = (oldId: string, newName: string) => {
+        const cleanName = newName.trim().replace(/\s+/g, '_');
+        if (!cleanName) return;
+
+        // Nếu ID mới trùng với một Node khác hiện có, chỉ cập nhật tên hiển thị tạm thời
+        if (nodes.some(n => n.id === cleanName && n.id !== oldId)) {
+            setNodes((nds) => nds.map(n => n.id === oldId ? { ...n, data: { ...n.data, name: newName } } : n));
+            return;
+        }
+
+        // Cập nhật ID vật lý của Node và tên dữ liệu đồng thời
+        setNodes((nds) => nds.map(n => {
+            if (n.id === oldId) {
+                return {
+                    ...n,
+                    id: cleanName,
+                    data: { ...n.data, name: cleanName }
+                };
+            }
+            return n;
+        }));
+
+        // Giữ nguyên trạng thái chọn Node sau khi đổi ID
+        if (selectedNodeId === oldId) {
+            setSelectedNodeId(cleanName);
+        }
+
+        // Tự động tìm và cập nhật lại các dây nối (Edges) nguồn và đích liên quan
+        setEdges((eds) => eds.map(edge => {
+            let updated = false;
+            const newEdge = { ...edge };
+            if (edge.source === oldId) {
+                newEdge.source = cleanName;
+                newEdge.id = `edge-${cleanName}-${edge.target}`;
+                updated = true;
+            }
+            if (edge.target === oldId) {
+                newEdge.target = cleanName;
+                newEdge.id = `edge-${newEdge.source}-${cleanName}`;
+                updated = true;
+            }
+            return updated ? newEdge : edge;
+        }));
+    };
+
+    // Hàm tạo Node từ Template đồng bộ hoàn toàn ID với tên mẫu
+    const handleAddNodeFromTemplate = (templateName: string, x: number, y: number) => {
+        const template = savedAgentTemplates.find(t => t.name === templateName);
+        if (!template) return;
+
+        // Chuẩn hóa tên và tự động thêm hậu tố số nếu phát hiện trùng lặp ID trên canvas
+        const baseId = template.name.trim().replace(/\s+/g, '_');
+        let id = baseId;
+        let counter = 1;
+        while (nodes.some(n => n.id === id)) {
+            id = `${baseId}_${counter}`;
+            counter++;
+        }
+
+        const newNode: Node = {
+            id, // ID vật lý ReactFlow trùng khớp hoàn toàn với tên template
+            position: { x, y },
+            type: "agent",
+            data: {
+                name: id,
+                type: "agent",
+                system_prompt: template.system_prompt || "",
+                tools: template.tools || [],
+                model_mode: template.model_mode || "fast",
+                theme: theme
+            }
+        };
+
+        setNodes((nds) => [...nds, newNode]);
+        setSelectedNodeId(id);
+        setSelectedEdgeId(null);
+    };
     // 1. Tải danh sách Skills từ Server
     useEffect(() => {
         fetch('/api/skills')
@@ -210,7 +351,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 animated: true,
                 style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '4,4' },
                 labelStyle: { fill: '#10b981', fontWeight: 700, fontSize: 9 },
-                labelBgStyle: { fill: '#f0fdf4', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1, rx: 4 },
+                labelBgStyle: { fill: isDark ? '#05050c' : '#f0fdf4', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1, rx: 4 },
                 data: { ...edge.data, pathType: "success" }
             };
         } else if (pathType === "failure") {
@@ -220,7 +361,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 animated: true,
                 style: { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '4,4' },
                 labelStyle: { fill: '#ef4444', fontWeight: 700, fontSize: 9 },
-                labelBgStyle: { fill: '#fef2f2', fillOpacity: 0.9, stroke: '#ef4444', strokeWidth: 1, rx: 4 },
+                labelBgStyle: { fill: isDark ? '#05050c' : '#fef2f2', fillOpacity: 0.9, stroke: '#ef4444', strokeWidth: 1, rx: 4 },
                 data: { ...edge.data, pathType: "failure" }
             };
         } else {
@@ -232,7 +373,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 data: { ...edge.data, pathType: "default" }
             };
         }
-    }, []);
+    }, [isDark]);
 
     // 2. KHAI BÁO HÀM NẠP MẪU ĐỒ THỊ
     const handleLoadTemplate = useCallback((templateKey: keyof typeof FSM_TEMPLATES) => {
@@ -252,18 +393,19 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 type: "agent",
                 system_prompt: n.system_prompt,
                 tools: n.tools || [],
-                model_mode: n.model_mode || "fast"
+                model_mode: n.model_mode || "fast",
+                theme: theme
             } : {
                 name: n.name,
                 type: "validator",
                 target_file_key: n.target_file_key || "target_file",
                 next_on_success: n.next_on_success || "end",
-                next_on_failure: n.next_on_failure || ""
+                next_on_failure: n.next_on_failure || "",
+                theme: theme
             }
         }));
 
         const loadedEdges = t.edges.map(e => {
-            // SỬA LỖI ts(2345): Ép kiểu an toàn (Type Assertion) ngăn trình biên dịch báo lỗi string không tương thích
             const pathType = (e.data?.pathType as "success" | "failure" | "default") || "default";
             const baseEdge = {
                 id: e.id,
@@ -278,7 +420,15 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
         setEdges(loadedEdges);
         setSelectedNodeId(null);
         setSelectedEdgeId(null);
-    }, [setNodes, setEdges, formatEdgeStyle]);
+    }, [setNodes, setEdges, formatEdgeStyle, theme]);
+
+    // Đảm bảo Node Renderer luôn cập nhật chính xác khi Theme toàn cục thay đổi
+    useEffect(() => {
+        setNodes((nds) => nds.map(n => ({
+            ...n,
+            data: { ...n.data, theme }
+        })));
+    }, [theme, setNodes]);
 
     // 3. ĐỒNG BỘ ĐỒ THỊ CHỈNH SỬA EDITCONFIG
     useEffect(() => {
@@ -301,13 +451,15 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             type: "agent",
                             system_prompt: nodeVal.system_prompt || "",
                             tools: nodeVal.tools || [],
-                            model_mode: nodeVal.model_mode || "fast"
+                            model_mode: nodeVal.model_mode || "fast",
+                            theme: theme
                         } : {
                             name: nodeId,
                             type: "validator",
                             target_file_key: nodeVal.target_file_key || "target_file",
                             next_on_success: nodeVal.next_on_success || "end",
-                            next_on_failure: nodeVal.next_on_failure || ""
+                            next_on_failure: nodeVal.next_on_failure || "",
+                            theme: theme
                         }
                     });
                 });
@@ -355,12 +507,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
             setSelectedNodeId(null);
             setSelectedEdgeId(null);
         }
-    }, [editConfig, setNodes, setEdges, formatEdgeStyle]);
-
-    // Khởi tạo đồ thị Bug Fixer mặc định khi mở thiết kế
-    useEffect(() => {
-        handleLoadTemplate("bug_fixer");
-    }, [handleLoadTemplate]);
+    }, [editConfig, setNodes, setEdges, formatEdgeStyle, theme]);
 
     // Xử lý tạo kết nối (Kéo từ Validator thì tự động rải đường Success/Failure tiện lợi)
     const onConnect = useCallback((params: Connection) => {
@@ -448,13 +595,15 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                 type: "agent",
                                 system_prompt: nodeVal.system_prompt || "",
                                 tools: nodeVal.tools || [],
-                                model_mode: nodeVal.model_mode || "fast"
+                                model_mode: nodeVal.model_mode || "fast",
+                                theme: theme
                             } : {
                                 name: nodeId,
                                 type: "validator",
                                 target_file_key: nodeVal.target_file_key || "target_file",
                                 next_on_success: nodeVal.next_on_success || "end",
-                                next_on_failure: nodeVal.next_on_failure || ""
+                                next_on_failure: nodeVal.next_on_failure || "",
+                                theme: theme
                             }
                         });
                     });
@@ -521,13 +670,15 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 type: "agent",
                 system_prompt: "Chỉ thị hệ thống cho Agent mới...",
                 tools: [],
-                model_mode: "fast"
+                model_mode: "fast",
+                theme: theme
             } : {
                 name: id,
                 type: "validator",
                 target_file_key: "target_file",
                 next_on_success: "end",
-                next_on_failure: ""
+                next_on_failure: "",
+                theme: theme
             }
         };
 
@@ -536,7 +687,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
         setSelectedEdgeId(null);
     };
 
-    const handleDragStart = (e: React.DragEvent, nodeType: "agent" | "validator") => {
+    const handleDragStart = (e: React.DragEvent, nodeType: string) => {
         e.dataTransfer.setData("application/reactflow", nodeType);
         e.dataTransfer.effectAllowed = "move";
     };
@@ -548,8 +699,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        const nodeType = e.dataTransfer.getData("application/reactflow") as "agent" | "validator";
-        if (!nodeType) return;
+        const dragType = e.dataTransfer.getData("application/reactflow");
+        if (!dragType) return;
 
         const reactFlowBounds = document.querySelector(".react-flow")?.getBoundingClientRect();
         if (!reactFlowBounds) return;
@@ -557,7 +708,12 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
         const x = e.clientX - reactFlowBounds.left - 90;
         const y = e.clientY - reactFlowBounds.top - 40;
 
-        handleAddNode(nodeType, x, y);
+        if (dragType.startsWith("template:")) {
+            const templateName = dragType.replace("template:", "");
+            handleAddNodeFromTemplate(templateName, x, y);
+        } else if (dragType === "agent" || dragType === "validator") {
+            handleAddNode(dragType, x, y);
+        }
     };
 
     const selectedNode = useMemo(() => {
@@ -594,16 +750,14 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
         setSelectedEdgeId(null);
     };
 
-    // REAL-TIME CONFIGURATION LINTER
+    // REAL-TIME CANVAS LINTER ACCORDION
     const linterWarnings = useMemo(() => {
         const warnings: string[] = [];
 
-        // 1. Kiểm tra điểm khởi chạy (Initial Node)
         if (entryPoint && !nodes.some(n => n.id === entryPoint)) {
             warnings.push(`⚠️ Điểm khởi chạy "${entryPoint}" không khớp với bất kỳ Node ID nào.`);
         }
 
-        // 2. Kiểm tra các Node mồ côi (Cô lập)
         nodes.forEach(n => {
             const hasIncoming = edges.some(e => e.target === n.id);
             const hasOutgoing = edges.some(e => e.source === n.id);
@@ -612,18 +766,18 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
             }
         });
 
-        // 3. Kiểm tra Validator thiếu phân nhánh rẽ hướng Success/Failure
         nodes.forEach(n => {
             if (n.data?.type === 'validator') {
                 const outEdges = edges.filter(e => e.source === n.id);
-                const hasSuccess = outEdges.some(e => e.data?.pathType === 'success');
-                const hasFailure = outEdges.some(e => e.data?.pathType === 'failure');
+                // CHỐT CHẶN HOÀN THIỆN
+                const hasSuccess = outEdges.some(e => e.data?.pathType === 'success') || n.data?.next_on_success === 'end';
+                const hasFailure = outEdges.some(e => e.data?.pathType === 'failure') || (n.data?.next_on_failure && n.data.next_on_failure !== "");
 
                 if (!hasSuccess) {
-                    warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✓ Success".`);
+                    warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✓ Success" (hoặc đích đến thành công chưa được thiết lập là "end").`);
                 }
                 if (!hasFailure) {
-                    warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✗ Failure".`);
+                    warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✗ Failure" (Hãy nối dây tới Node xử lý lỗi).`);
                 }
             }
         });
@@ -716,9 +870,31 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
         };
     };
 
-    const handleSaveHarness = () => {
+    const handleSaveHarness = async () => {
         setSaving(true);
         setMessage(null);
+
+        try {
+            // Tải danh sách quy trình hiện tại để đối chiếu trùng lặp
+            const res = await fetch('/api/dashboard/harnesses');
+            const data = await res.json();
+            if (data.success && Array.isArray(data.harnesses)) {
+                const isDuplicate = data.harnesses.some(
+                    (h: any) => h.harness_name.toLowerCase() === harnessName.toLowerCase().trim()
+                );
+                if (isDuplicate) {
+                    const proceed = confirm(
+                        `⚠️ Phát hiện quy trình tên "${harnessName}" đã tồn tại. Bạn có muốn ghi đè lên cấu hình cũ không?`
+                    );
+                    if (!proceed) {
+                        setSaving(false);
+                        return;
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Lỗi kiểm tra trùng tên sơ đồ:", err);
+        }
 
         const harnessConfig = compileToJSON();
 
@@ -755,28 +931,59 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
             />
 
             {/* CỘT TRÁI: ReactFlow CANVAS */}
-            <div className="lg:col-span-8 border border-zinc-200 rounded-2xl relative bg-zinc-50 overflow-hidden shadow-xs flex flex-col h-full">
+            <div className={`lg:col-span-8 border rounded-2xl relative overflow-hidden shadow-xs flex flex-col h-full transition-colors duration-200 ${isDark ? "bg-[#05050c] border-zinc-850" : "bg-zinc-50 border-zinc-200"
+                }`}>
 
                 {/* 🛠️ Top Bar Controls */}
-                <div className="p-3 bg-white border-b border-zinc-200 flex flex-wrap justify-between items-center gap-2 select-none z-10 shrink-0">
+                <div className={`p-3 border-b flex flex-wrap justify-between items-center gap-2 select-none z-10 shrink-0 transition-colors duration-200 ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                    }`}>
                     <div className="flex gap-2 flex-wrap">
-                        <Button size="sm" variant="outline" className="h-7 text-[10px] cursor-pointer" onClick={() => handleAddNode("agent")}>
+                        {/* ĐỒNG BỘ THEME CHO CHỮ NÚT BẤM (Sửa triệt để lỗi mất chữ) */}
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={`h-7 text-[10px] cursor-pointer transition-colors ${isDark
+                                ? "text-zinc-200 border-zinc-700 hover:bg-zinc-850 hover:text-white"
+                                : "text-zinc-800 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            onClick={() => handleAddNode("agent")}
+                        >
                             ➕ Click thêm Agent
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 text-[10px] cursor-pointer" onClick={() => handleAddNode("validator")}>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={`h-7 text-[10px] cursor-pointer transition-colors ${isDark
+                                ? "text-zinc-200 border-zinc-700 hover:bg-zinc-850 hover:text-white"
+                                : "text-zinc-800 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            onClick={() => handleAddNode("validator")}
+                        >
                             ➕ Click thêm Validator
                         </Button>
-                        <Button size="sm" variant="outline" className="h-7 text-[10px] cursor-pointer text-red-655 border-red-200 hover:bg-red-50" onClick={handleResetCanvas}>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={`h-7 text-[10px] cursor-pointer transition-colors ${isDark
+                                ? "text-red-400 border-red-900/60 hover:bg-red-950/30"
+                                : "text-red-655 border-red-200 hover:bg-red-50"
+                                }`}
+                            onClick={handleResetCanvas}
+                        >
                             🧹 Dọn Canvas
                         </Button>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <select
-                            onChange={(e) => handleLoadTemplate(e.target.value as any)}
-                            defaultValue="bug_fixer"
-                            className="h-7 px-2.5 bg-white border border-zinc-200 hover:border-zinc-350 rounded text-[10px] font-bold outline-none cursor-pointer text-zinc-700"
+                            onChange={(e) => {
+                                if (e.target.value) handleLoadTemplate(e.target.value as any);
+                            }}
+                            defaultValue=""
+                            className={`h-7 px-2.5 border rounded text-[10px] font-bold outline-none cursor-pointer transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-300" : "bg-white border-zinc-200 text-zinc-750"
+                                }`}
                         >
+                            <option value="" disabled>-- Chọn Sơ đồ mẫu --</option>
                             <option value="bug_fixer">🐞 Mẫu: Bug-Fixer Loop</option>
                             <option value="security_scanner">🛡️ Mẫu: Secure-Scanner</option>
                             <option value="doc_generator">📖 Mẫu: Doc-Generator</option>
@@ -785,14 +992,16 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                         <button
                             type="button"
                             onClick={handleImportJSONClick}
-                            className="px-2.5 py-1 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 hover:text-zinc-800 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-3xs"
+                            className={`px-2.5 py-1 border rounded text-[10px] font-bold cursor-pointer transition-colors shadow-3xs ${isDark ? "bg-zinc-950 border-zinc-850 text-zinc-300 hover:bg-zinc-800" : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                                }`}
                         >
                             📤 Upload JSON
                         </button>
                         <button
                             type="button"
                             onClick={handleExportJSON}
-                            className="px-2.5 py-1 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 hover:text-zinc-800 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-3xs"
+                            className={`px-2.5 py-1 border rounded text-[10px] font-bold cursor-pointer transition-colors shadow-3xs ${isDark ? "bg-zinc-950 border-zinc-850 text-zinc-300 hover:bg-zinc-800" : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                                }`}
                         >
                             📥 Download JSON
                         </button>
@@ -820,46 +1029,87 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             setSelectedNodeId(null);
                         }}
                         nodeTypes={nodeTypes}
+                        className={isDark ? 'bg-[#05050c]' : 'bg-[#f4f4f5]'}
                         proOptions={{ hideAttribution: true }}
                     >
-                        <Background color="#cbd5e1" gap={16} size={1} />
-                        <Controls />
-                        <MiniMap />
+                        <Background color={isDark ? '#312e81' : '#cbd5e1'} gap={16} size={1} />
+                        <Controls className={isDark ? 'bg-zinc-900 border border-zinc-800 text-zinc-100' : 'bg-white border border-zinc-200 text-zinc-800'} />
+                        <MiniMap className={isDark ? 'bg-zinc-900/90 border border-zinc-800' : 'bg-white/90 border border-zinc-200'} />
                     </ReactFlow>
 
                     {/* FLOATING DRAG PALETTE ON CANVAS */}
-                    <div className="absolute bottom-4 left-4 z-20 bg-white/95 border border-zinc-200 shadow-xl rounded-xl p-3.5 flex flex-col gap-2 select-none pointer-events-auto">
+                    <div className={`absolute bottom-4 left-4 z-20 border shadow-xl rounded-xl p-3.5 flex flex-col gap-2 select-none pointer-events-auto transition-colors max-w-sm ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white/95 border-zinc-200"
+                        }`}>
                         <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block text-left mb-1">
                             Kéo vật liệu vào Sơ đồ
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
                             <div
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, "agent")}
-                                className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-xs font-mono font-bold cursor-grab active:cursor-grabbing hover:bg-blue-100 flex items-center gap-1.5 shadow-3xs"
-                                title="Kéo thả Agent Node vào Canvas"
+                                className={`px-3 py-2 border rounded-lg text-xs font-mono font-bold cursor-grab active:cursor-grabbing flex items-center gap-1.5 shadow-3xs transition-colors ${isDark ? "bg-blue-950/20 border-blue-900/60 text-blue-400 hover:bg-blue-900/10" : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                    }`}
+                                title="Kéo thả Agent mặc định"
                             >
                                 <span>🤖</span> Agent
                             </div>
                             <div
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, "validator")}
-                                className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs font-mono font-bold cursor-grab active:cursor-grabbing hover:bg-emerald-100 flex items-center gap-1.5 shadow-3xs"
-                                title="Kéo thả Validator Node vào Canvas"
+                                className={`px-3 py-2 border rounded-lg text-xs font-mono font-bold cursor-grab active:cursor-grabbing flex items-center gap-1.5 shadow-3xs transition-colors ${isDark ? "bg-emerald-950/20 border-emerald-900/60 text-emerald-400 hover:bg-emerald-900/10" : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                    }`}
+                                title="Kéo thả Validator mặc định"
                             >
                                 <span>🛡️</span> Validator
                             </div>
+
+                            {/* Render danh sách Agent cá nhân đã lưu */}
+                            {savedAgentTemplates.map((template) => (
+                                <div
+                                    key={template.id}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, `template:${template.name}`)}
+                                    className={`px-3 py-2 border rounded-lg text-xs font-mono font-bold cursor-grab active:cursor-grabbing flex items-center gap-1.5 shadow-3xs transition-colors group relative ${isDark
+                                        ? "bg-purple-950/20 border-purple-900/60 text-purple-400 hover:bg-purple-900/10"
+                                        : "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                                        }`}
+                                    title={`Mẫu Agent: ${template.name}`}
+                                >
+                                    <span>🧠</span> {template.name}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`Bạn có chắc muốn xóa mẫu Agent "${template.name}"?`)) {
+                                                fetch(`/api/dashboard/agent-templates/${template.id}`, { method: 'DELETE' })
+                                                    .then(res => res.json())
+                                                    .then(data => {
+                                                        if (data.success) {
+                                                            fetchAgentTemplates();
+                                                        }
+                                                    });
+                                            }
+                                        }}
+                                        className="text-[9px] text-red-500 hover:text-red-700 ml-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer font-bold select-none border-none bg-transparent"
+                                        title="Xóa mẫu này"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* CỘT PHẢI: CONFIG PANEL SIDEBAR */}
-            <div className="lg:col-span-4 border border-zinc-200 rounded-2xl p-4 bg-zinc-50/50 flex flex-col h-full overflow-y-auto space-y-4 font-sans select-none">
+            <div className={`lg:col-span-4 border rounded-2xl p-4 flex flex-col h-full overflow-y-auto space-y-4 font-sans select-none transition-colors duration-200 ${isDark ? "bg-zinc-900/30 border-zinc-800" : "bg-zinc-50/50 border-zinc-200"
+                }`}>
 
                 {/* 1. Thiết lập chung */}
-                <div className="space-y-3 bg-white p-4 rounded-xl border border-zinc-200 shadow-3xs text-left select-text">
-                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider select-none border-b pb-1">⚙️ Cài đặt chung (Harness)</h3>
+                <div className={`space-y-3 p-4 rounded-xl border shadow-3xs text-left select-text transition-colors duration-200 ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                    }`}>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider select-none border-b pb-1 ${isDark ? "text-zinc-400 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>⚙️ Cài đặt chung (Harness)</h3>
 
                     <div className="space-y-1">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase">Tên Quy Trình (Harness Key)</label>
@@ -867,7 +1117,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             type="text"
                             value={harnessName}
                             onChange={(e) => setHarnessName(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-semibold outline-none focus:border-zinc-300"
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-semibold outline-none transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                }`}
                         />
                     </div>
 
@@ -877,7 +1128,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={2}
-                            className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs outline-none focus:border-zinc-300 resize-none leading-relaxed"
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs outline-none transition-colors resize-none leading-relaxed ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                }`}
                         />
                     </div>
 
@@ -888,20 +1140,22 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             value={entryPoint}
                             onChange={(e) => setEntryPoint(e.target.value)}
                             placeholder="planner"
-                            className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-semibold outline-none focus:border-zinc-300"
+                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-semibold outline-none transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                }`}
                         />
                     </div>
                 </div>
 
                 {/* REAL-TIME CANVAS LINTER ACCORDION */}
                 {linterWarnings.length > 0 && (
-                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-1.5 text-left shrink-0">
+                    <div className={`p-3.5 border rounded-xl space-y-1.5 text-left shrink-0 transition-colors ${isDark ? "bg-red-950/20 border-red-900/40 text-rose-400" : "bg-rose-50 border-rose-200 text-rose-700"
+                        }`}>
                         <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest block select-none">
                             🚨 Trình kiểm duyệt lỗi sơ đồ (Live Linter)
                         </span>
                         <div className="space-y-1 max-h-24 overflow-y-auto pr-0.5">
                             {linterWarnings.map((w, wIdx) => (
-                                <p key={wIdx} className="text-[10px] text-rose-700 leading-normal font-medium select-text">
+                                <p key={wIdx} className={`text-[10px] leading-normal font-medium select-text ${isDark ? "text-rose-300" : "text-rose-700"}`}>
                                     {w}
                                 </p>
                             ))}
@@ -910,19 +1164,36 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                 )}
 
                 {/* 2. Cấu hình phần tử đang chọn (Node / Edge) */}
-                <div className="flex-1 bg-white p-4 rounded-xl border border-zinc-200 shadow-3xs flex flex-col text-left select-text min-h-[300px]">
+                <div className={`flex-1 p-4 rounded-xl border shadow-3xs flex flex-col text-left select-text min-h-[300px] transition-colors duration-200 ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                    }`}>
 
                     {/* NODE CONFIGURATION PANEL */}
                     {selectedNode && (
                         <div className="space-y-4 flex-1 flex flex-col overflow-y-auto">
-                            <div className="flex justify-between items-center select-none border-b pb-1.5 shrink-0">
-                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${selectedNode.data.type === 'agent' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                            <div className={`flex justify-between items-center select-none border-b pb-1.5 shrink-0 ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
+                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${selectedNode.data.type === 'agent'
+                                    ? (isDark ? "bg-blue-950/20 border-blue-900/40 text-blue-400" : "bg-blue-50 border-blue-200 text-blue-600")
+                                    : (isDark ? "bg-emerald-950/20 border-emerald-900/40 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-600")
                                     }`}>
                                     {selectedNode.data.type} Node
                                 </span>
-                                <Button size="sm" variant="ghost" onClick={handleDeleteNode} className="h-6 text-[9px] text-red-655 hover:bg-red-50 cursor-pointer">
-                                    🗑️ Xóa Node
-                                </Button>
+                                <div className="flex items-center gap-1.5">
+                                    {selectedNode.data.type === 'agent' && (
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveAsTemplate}
+                                            className={`px-2 py-1 rounded border text-[9px] font-bold cursor-pointer transition-colors ${isDark
+                                                ? "bg-purple-950/30 border-purple-900/60 text-purple-400 hover:bg-purple-900/30"
+                                                : "bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100"
+                                                }`}
+                                        >
+                                            {templateSaveStatus || "💾 Lưu mẫu"}
+                                        </button>
+                                    )}
+                                    <Button size="sm" variant="ghost" onClick={handleDeleteNode} className="h-6 text-[9px] text-red-655 hover:bg-red-50 cursor-pointer">
+                                        🗑️ Xóa Node
+                                    </Button>
+                                </div>
                             </div>
 
                             <div className="space-y-1 shrink-0">
@@ -930,8 +1201,9 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                 <input
                                     type="text"
                                     value={selectedNode.data.name}
-                                    onChange={(e) => handleUpdateSelectedNodeData({ name: e.target.value })}
-                                    className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-semibold outline-none"
+                                    onChange={(e) => handleRenameNode(selectedNode.id, e.target.value)}
+                                    className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-semibold outline-none transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                        }`}
                                 />
                             </div>
 
@@ -943,7 +1215,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                         <select
                                             value={selectedNode.data.model_mode || "fast"}
                                             onChange={(e) => handleUpdateSelectedNodeData({ model_mode: e.target.value as any })}
-                                            className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-semibold outline-none text-zinc-700 cursor-pointer"
+                                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-semibold outline-none cursor-pointer transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-700 focus:border-zinc-300"
+                                                }`}
                                         >
                                             <option value="fast">⚡ Fast (Mô hình xử lý nhanh)</option>
                                             <option value="thinking">🧠 DeepThink (Suy nghĩ sâu)</option>
@@ -956,34 +1229,46 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                             value={selectedNode.data.system_prompt || ""}
                                             onChange={(e) => handleUpdateSelectedNodeData({ system_prompt: e.target.value })}
                                             placeholder="Bạn là chuyên gia... Đọc bối cảnh sau: ${state.last_output}"
-                                            className="w-full flex-1 p-2 bg-white border border-zinc-200 rounded-lg text-xs outline-none font-mono leading-relaxed"
+                                            className={`w-full flex-1 p-2 border rounded-lg text-xs outline-none font-mono leading-relaxed transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-250 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                                }`}
                                         />
                                     </div>
 
+                                    {/* THẺ KÉN QUẤN DÒNG TOOLS (Pill Tags) */}
                                     <div className="space-y-1.5 shrink-0">
                                         <label className="text-[10px] font-bold text-zinc-400 uppercase">Năng lực gán (Tools)</label>
-                                        <div className="border border-zinc-200 rounded-lg p-2.5 max-h-24 overflow-y-auto space-y-1 select-none">
+                                        <div className={`p-2.5 border rounded-lg max-h-40 overflow-y-auto flex flex-wrap gap-1.5 select-none transition-colors ${isDark ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200"
+                                            }`}>
                                             {availableSkills.map(skill => {
                                                 const isChecked = selectedNode.data.tools?.includes(skill.name);
                                                 return (
-                                                    <div key={skill.name} className="flex items-center gap-2">
-                                                        <input
-                                                            id={`skill_chk_${skill.name}`}
-                                                            type="checkbox"
-                                                            checked={isChecked}
-                                                            onChange={(e) => {
-                                                                const currentTools = selectedNode.data.tools || [];
-                                                                const nextTools = e.target.checked
-                                                                    ? [...currentTools, skill.name]
-                                                                    : currentTools.filter((t: string) => t !== skill.name);
-                                                                handleUpdateSelectedNodeData({ tools: nextTools });
-                                                            }}
-                                                            className="w-3.5 h-3.5 text-blue-600 border-zinc-300 rounded cursor-pointer"
-                                                        />
-                                                        <label htmlFor={`skill_chk_${skill.name}`} className="text-[10px] font-mono text-zinc-655 cursor-pointer">{skill.name}</label>
-                                                    </div>
+                                                    <button
+                                                        key={skill.name}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const currentTools = selectedNode.data.tools || [];
+                                                            const nextTools = isChecked
+                                                                ? currentTools.filter((t: string) => t !== skill.name)
+                                                                : [...currentTools, skill.name];
+                                                            handleUpdateSelectedNodeData({ tools: nextTools });
+                                                        }}
+                                                        className={`px-2.5 py-1 rounded-full border text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1 leading-none h-6 ${isChecked
+                                                            ? (isDark
+                                                                ? 'bg-blue-600 border-blue-600 text-white font-bold'
+                                                                : 'bg-blue-600 border-blue-600 text-white font-bold shadow-3xs')
+                                                            : (isDark
+                                                                ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                                                                : 'bg-zinc-50 border-zinc-200 text-zinc-655 hover:bg-zinc-100 hover:text-zinc-850')
+                                                            }`}
+                                                    >
+                                                        <span className="text-[8px] font-bold select-none">{isChecked ? "✓" : "+"}</span>
+                                                        {skill.name}
+                                                    </button>
                                                 );
                                             })}
+                                            {availableSkills.length === 0 && (
+                                                <span className="text-zinc-500 italic text-[10px]">Không tìm thấy skills khả dụng</span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -998,11 +1283,13 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                             type="text"
                                             value={selectedNode.data.target_file_key || "target_file"}
                                             onChange={(e) => handleUpdateSelectedNodeData({ target_file_key: e.target.value })}
-                                            className="w-full px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-semibold"
+                                            className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-semibold transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100 focus:border-zinc-700" : "bg-white border-zinc-200 text-zinc-800 focus:border-zinc-300"
+                                                }`}
                                         />
                                     </div>
 
-                                    <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl space-y-1.5">
+                                    <div className={`p-3 border rounded-xl space-y-1.5 transition-colors ${isDark ? "bg-zinc-950 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+                                        }`}>
                                         <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider block">
                                             💡 HƯỚNG DẪN KẾT NỐI RẼ NHÁNH
                                         </span>
@@ -1018,7 +1305,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                     {/* EDGE CONFIGURATION PANEL */}
                     {selectedEdge && (
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center select-none border-b pb-1.5 shrink-0">
+                            <div className={`flex justify-between items-center select-none border-b pb-1.5 shrink-0 ${isDark ? "border-zinc-800" : "border-zinc-100"}`}>
                                 <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border bg-purple-50 border-purple-200 text-purple-600">
                                     Edge Connection
                                 </span>
@@ -1033,7 +1320,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                             </div>
 
                             {/* CHỌN ĐƯỜNG DẪN HOẠT ĐỘNG CHO DÂY */}
-                            <div className="space-y-2 pt-2 border-t">
+                            <div className={`space-y-2 pt-2 border-t ${isDark ? "border-zinc-800" : "border-zinc-200"}`}>
                                 <label className="text-[10px] font-bold text-zinc-400 uppercase">Cấu hình rẽ nhánh điều kiện</label>
                                 <div className="flex flex-col gap-1.5">
                                     <button
@@ -1041,7 +1328,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                         onClick={() => handleSwitchEdgeType("default")}
                                         className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${!selectedEdge.data?.pathType || selectedEdge.data?.pathType === 'default'
                                             ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold'
-                                            : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                            : (isDark ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800" : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50")
                                             }`}
                                     >
                                         🔵 Connection thông thường
@@ -1051,7 +1338,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                         onClick={() => handleSwitchEdgeType("success")}
                                         className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${selectedEdge.data?.pathType === 'success'
                                             ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-bold'
-                                            : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                            : (isDark ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800" : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50")
                                             }`}
                                     >
                                         🟢 Success Path (Khi xác thực thành công)
@@ -1061,7 +1348,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig }: GraphBuilderProps) {
                                         onClick={() => handleSwitchEdgeType("failure")}
                                         className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${selectedEdge.data?.pathType === 'failure'
                                             ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold'
-                                            : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                            : (isDark ? "bg-zinc-950 border-zinc-800 text-zinc-400 hover:bg-zinc-800" : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50")
                                             }`}
                                     >
                                         🔴 Failure Path (Khi kiểm duyệt phát hiện lỗi)
