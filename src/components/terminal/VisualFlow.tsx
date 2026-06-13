@@ -359,6 +359,23 @@ function VisualFlowInner({
         return nodes.find((n) => n.id === selectedNode.id) || selectedNode;
     }, [nodes, selectedNode]);
 
+    // Khai báo con trỏ tham chiếu đến vùng cuộn của Inspector Modal
+    const modalScrollRef = useRef<HTMLDivElement>(null);
+
+    // Tự động cuộn xuống cuối cùng khi nhấp mở Node hoặc khi Node đang stream nội dung mới
+    useEffect(() => {
+        if (selectedNode && modalScrollRef.current) {
+            // Sử dụng một khoảng trễ cực ngắn (50ms) để đảm bảo toàn bộ DOM và Timeline 
+            // bên trong Modal đã được mount và dựng xong kích thước thực tế trước khi cuộn
+            const timer = setTimeout(() => {
+                if (modalScrollRef.current) {
+                    modalScrollRef.current.scrollTop = modalScrollRef.current.scrollHeight;
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedNode?.id]);
+
     const lastAssistantMessage = useMemo(() => {
         return [...messages].reverse().find(m => m.role === 'assistant');
     }, [messages]);
@@ -564,6 +581,10 @@ function VisualFlowInner({
                 content = JSON.stringify(turns);
             }
 
+            // Trích xuất thống kê Token đang dùng từ phản hồi của phiên chat hiện tại
+            const activeAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
+            const activeUsage = activeAssistantMsg?.usage || null;
+
             nodesList.push({
                 id: nodeName,
                 type: isValidator ? 'cyberValidator' : 'cyberAgent',
@@ -573,7 +594,8 @@ function VisualFlowInner({
                     role: isValidator ? "Strict Quality Gate" : "Specialist Worker Node",
                     model: workspaceData.provider.model || "Local Engine",
                     state: stateString,
-                    content: content
+                    content: content,
+                    usage: nodeName === activeNodeName ? (activeUsage || undefined) : undefined
                 },
                 position: {
                     x: lastUserMsg ? position.x + 300 : position.x,
@@ -939,8 +961,11 @@ function VisualFlowInner({
                                 </button>
                             </div>
 
-                            <div className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${theme === 'dark' ? 'bg-[#020204]' : 'bg-white'
-                                }`}>
+                            <div
+                                ref={modalScrollRef}
+                                className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${theme === 'dark' ? 'bg-[#020204]' : 'bg-white'
+                                    }`}
+                            >
                                 <div className={`flex justify-between items-start flex-wrap gap-2 border-b pb-4 ${theme === 'dark' ? 'border-zinc-900' : 'border-zinc-100'
                                     }`}>
                                     <div>

@@ -10,6 +10,11 @@ interface CyberAgentNodeProps {
         model: string;
         state: "running" | "thinking" | "completed" | string;
         content?: string;
+        usage?: {
+            input_tokens: number;
+            output_tokens: number;
+            total_tokens?: number;
+        };
     };
 }
 
@@ -59,6 +64,14 @@ export const CyberAgentNode = React.memo(({ data }: CyberAgentNodeProps) => {
                 <div className={`text-[10px] font-medium ${labelColor}`}>
                     <span className={`${isDark ? "text-zinc-500" : "text-zinc-400"} font-semibold`}>Model:</span> <span className="font-bold" style={{ color: isDark ? '#60a5fa' : '#2563eb' }}>{data.model}</span>
                 </div>
+                {data.usage && (
+                    <div className={`text-[9px] font-semibold font-mono ${isDark ? "text-zinc-500" : "text-zinc-400"} flex justify-between select-text mt-1.5 pt-1 border-t ${borderLineColor}`}>
+                        <span>Tokens:</span>
+                        <span className={isDark ? "text-zinc-300" : "text-zinc-600"}>
+                            In: {data.usage.input_tokens.toLocaleString()} | Out: {data.usage.output_tokens.toLocaleString()}
+                        </span>
+                    </div>
+                )}
                 <div className={`text-[9px] mt-1 pt-1 border-t flex justify-between select-none ${borderLineColor}`}>
                     <span className={isDark ? "text-zinc-500" : "text-zinc-400"}>Status:</span>
                     <span className={stateColor}>{data.state?.toUpperCase()}</span>
