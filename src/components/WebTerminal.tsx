@@ -71,6 +71,7 @@ interface WebTerminalProps {
   sse: ReturnType<typeof useSSE>;
   workspaceData: WorkspaceData | null;
   onViewDiff?: (filePath: string) => void;
+  fetchWorkspace: () => void;
 }
 
 const getMessageTimeline = (msg: ChatMessage, msgIdx: number): TimelineItem[] => {
@@ -96,7 +97,7 @@ const getMessageTimeline = (msg: ChatMessage, msgIdx: number): TimelineItem[] =>
   return reconstructed;
 };
 
-export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData, onViewDiff }: WebTerminalProps) {
+export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, workspaceData, onViewDiff, fetchWorkspace }: WebTerminalProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollTopRef = useRef<number>(0);
@@ -180,26 +181,28 @@ export function WebTerminal({ activeAgent, activeModel, setActiveModel, sse, wor
       .catch((err) => console.error("Could not load commands database:", err));
   }, []);
 
-  const handleSwitchProvider = useCallback((providerKey: string, providerName: string) => {
+  // filepath: ridge_client/src/components/terminal/WebTerminal.tsx
+
+  const handleSwitchProvider = useCallback((providerKey: string, modelName: string) => {
     fetch('/api/provider/switch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: providerKey })
+      body: JSON.stringify({ provider: providerKey, model: modelName })
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          setActiveModel(providerName);
+          setActiveModel(modelName);
+          fetchWorkspace(); // Đồng bộ dữ liệu workspace ngay lập tức
           setLogs((prev) => [...prev, {
             timestamp: new Date().toLocaleTimeString(),
-            text: `🔄 Đã chuyển đổi nóng nhà cung cấp AI thành công sang: ${providerName}`,
+            text: `🔄 Đã chuyển đổi nóng nhà cung cấp AI thành công sang: ${modelName}`,
             type: 'default'
           }]);
         }
       })
-      .catch((err) => console.error("Gặp sự cố khi chuyển nhà cung cấp:", err));
-  }, [setActiveModel, setLogs]);
-
+      .catch((err) => console.error("Gặp sự cố khi chuyển nhà cung cấp ở WebTerminal:", err));
+  }, [setActiveModel, setLogs, fetchWorkspace]);
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
 
@@ -286,7 +289,7 @@ ${block}
   const activePipeline = workspaceData?.pipeline;
   const runningStepKey = workspaceData?.activeTask?.step_key || '';
   const currentStepMap = workspaceData?.states || [];
-  const currentActiveModelName = workspaceData?.provider?.name || activeModel;
+  const currentActiveModelName = activeModel; // Chỉ định trực tiếp activeModel để tránh lệch pha dữ liệu
 
   return (
     <div className={`flex-1 grid grid-cols-1 ${isSidebarOpen ? 'xl:grid-cols-[1fr_260px]' : 'xl:grid-cols-1'} h-full overflow-hidden bg-white border-l border-zinc-200 select-text text-zinc-800`}>

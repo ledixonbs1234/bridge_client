@@ -18,6 +18,18 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { Button } from "./animate-ui/button";
 
+// Định nghĩa hàm toSafeId xử lý chuẩn hóa tên tiếng Việt phía client
+function toSafeId(text: string): string {
+    if (!text) return "";
+    return text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Loại bỏ các dấu thanh tiếng Việt
+        .replace(/[đĐ]/g, m => m === 'đ' ? 'd' : 'D') // Chuyển đ, Đ -> d, D
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '_') // Thay thế ký tự đặc biệt còn lại thành _
+        .replace(/_+/g, '_') // Gom các dấu gạch dưới lặp lại
+        .trim();
+}
 interface SkillItem {
     name: string;
     desc: string;
@@ -254,7 +266,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
 
     // Hàm đồng bộ và đổi tên Node ID vật lý của ReactFlow kèm theo cập nhật lại dây nối (Edges)
     const handleRenameNode = (oldId: string, newName: string) => {
-        const cleanName = newName.trim().replace(/\s+/g, '_');
+        const cleanName = toSafeId(newName);
         if (!cleanName) return;
 
         // Nếu ID mới trùng với một Node khác hiện có, chỉ cập nhật tên hiển thị tạm thời
@@ -304,7 +316,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
         if (!template) return;
 
         // Chuẩn hóa tên và tự động thêm hậu tố số nếu phát hiện trùng lặp ID trên canvas
-        const baseId = template.name.trim().replace(/\s+/g, '_');
+        const baseId = toSafeId(template.name);
         let id = baseId;
         let counter = 1;
         while (nodes.some(n => n.id === id)) {

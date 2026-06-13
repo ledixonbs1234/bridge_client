@@ -13,6 +13,7 @@ interface CyberValidatorNodeProps {
 export const CyberValidatorNode = React.memo(({ data }: CyberValidatorNodeProps) => {
     const isDark = data.theme !== 'light';
     const isFailed = data.state === "failed" || data.state === "blocked";
+    const isValidating = data.state === "validating" || data.state === "thinking";
 
     let borderGlowClass = "";
     if (isDark) {
@@ -20,13 +21,17 @@ export const CyberValidatorNode = React.memo(({ data }: CyberValidatorNodeProps)
             ? "glow-neon-magenta border-red-500 text-red-500 bg-zinc-950/90"
             : data.state === "passed"
                 ? "glow-neon-green border-emerald-400 text-emerald-400 bg-zinc-950/90"
-                : "glow-neon-cyan border-cyan-400 text-cyan-400 bg-zinc-950/90";
+                : isValidating
+                    ? "glow-neon-cyan border-cyan-400 text-cyan-400 bg-zinc-950/90 animate-pulse"
+                    : "glow-neon-cyan border-cyan-400 text-cyan-400 bg-zinc-950/90";
     } else {
         borderGlowClass = isFailed
             ? "border-red-500 text-red-600 bg-white/95 shadow-md"
             : data.state === "passed"
                 ? "border-emerald-500 text-emerald-600 bg-white/95 shadow-md"
-                : "border-cyan-500 text-cyan-600 bg-white/95 shadow-md";
+                : isValidating
+                    ? "border-cyan-500 text-cyan-600 bg-white/95 shadow-md animate-pulse"
+                    : "border-cyan-500 text-cyan-600 bg-white/95 shadow-md";
     }
 
     const stateColor = isFailed

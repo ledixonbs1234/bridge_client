@@ -16,19 +16,28 @@ interface CyberAgentNodeProps {
 export const CyberAgentNode = React.memo(({ data }: CyberAgentNodeProps) => {
     const isDark = data.theme !== 'light';
     const isOrchestrator = data.name.includes("Orchestrator");
+    const isRunning = data.state === "running" || data.state === "thinking";
 
     let glowClass = "";
     if (isDark) {
-        glowClass = isOrchestrator
-            ? "glow-neon-yellow border-amber-400 text-amber-400 bg-zinc-950/90"
-            : "glow-neon-magenta border-purple-400 text-purple-400 bg-zinc-950/90";
+        if (isRunning) {
+            glowClass = "glow-neon-yellow border-amber-400 text-amber-400 bg-zinc-950/90 animate-pulse";
+        } else {
+            glowClass = isOrchestrator
+                ? "glow-neon-yellow border-amber-400 text-amber-400 bg-zinc-950/90"
+                : "glow-neon-magenta border-purple-400 text-purple-400 bg-zinc-950/90";
+        }
     } else {
-        glowClass = isOrchestrator
-            ? "border-amber-500 text-amber-600 bg-white/95 shadow-md"
-            : "border-purple-500 text-purple-600 bg-white/95 shadow-md";
+        if (isRunning) {
+            glowClass = "border-amber-500 text-amber-600 bg-white/95 shadow-md animate-pulse";
+        } else {
+            glowClass = isOrchestrator
+                ? "border-amber-500 text-amber-600 bg-white/95 shadow-md"
+                : "border-purple-500 text-purple-600 bg-white/95 shadow-md";
+        }
     }
 
-    const stateColor = data.state === "running" || data.state === "thinking"
+    const stateColor = isRunning
         ? "text-amber-500 animate-pulse font-bold"
         : "text-emerald-500 font-bold";
 

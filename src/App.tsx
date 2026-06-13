@@ -304,6 +304,24 @@ export default function App() {
       .catch((err) => alert("Lỗi kết nối tới máy chủ: " + err.message));
   };
 
+  // filepath: ridge_client/src/App.tsx
+
+  const handleSwitchProvider = (providerKey: string, modelName: string) => {
+    fetch('/api/provider/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: providerKey, model: modelName }) // Gửi kèm model
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setActiveModel(modelName);
+          fetchWorkspace(); // Đồng bộ lại dữ liệu hiển thị trên canvas
+        }
+      })
+      .catch((err) => console.error("Lỗi chuyển đổi provider ở App:", err));
+  };
+
   const handleDeleteHarness = (harnessId: string, displayName: string) => {
     if (!confirm(`⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn quy trình sơ đồ '${displayName}'? Thao tác này không thể hoàn tác.`)) return;
 
@@ -549,6 +567,7 @@ export default function App() {
               onViewDiff={handleViewDiffByPath}
               theme={theme}
               setTheme={setTheme}
+              fetchWorkspace={fetchWorkspace}
             />
           ) : activeTab === "builder" ? (
             <div className={`flex-1 flex flex-col overflow-hidden h-full border-l transition-colors duration-200 ${isDark ? "bg-[#05050c] text-zinc-200 border-zinc-800" : "bg-white text-zinc-800 border-zinc-200"

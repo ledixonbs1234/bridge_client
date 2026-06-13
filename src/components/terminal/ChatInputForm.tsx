@@ -1,6 +1,6 @@
 // filepath: ridge_client/src/components/terminal/ChatInputForm.tsx
 import * as React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "../animate-ui/button";
 
@@ -16,11 +16,29 @@ interface CommandInfo {
     category: string;
 }
 
+interface ModelOption {
+    provider: string;
+    model: string;
+    displayName: string;
+}
+
+const ALL_MODEL_OPTIONS: ModelOption[] = [
+    { provider: "qwen-web", model: "Qwen3.7-Plus", displayName: "Qwen3.7-Plus" },
+    { provider: "qwen-web", model: "Qwen3.7-Max", displayName: "Qwen3.7-Max" },
+    { provider: "qwen-web", model: "Qwen3.6-Plus", displayName: "Qwen3.6-Plus" },
+    { provider: "deepseek-web", model: "deepseek-reasoner", displayName: "DeepSeek Reasoner" },
+    { provider: "deepseek-web", model: "deepseek-chat", displayName: "DeepSeek Chat" },
+    { provider: "gemini-studio", model: "gemini-studio", displayName: "Gemini Studio" },
+    { provider: "openai", model: "gemini", displayName: "OpenAI: Gemini" },
+    { provider: "openai", model: "gpt-4o", displayName: "OpenAI: GPT-4o" },
+    { provider: "openai", model: "gpt-4o-mini", displayName: "OpenAI: GPT-4o-Mini" }
+];
+
 interface ChatInputFormProps {
     activeAgent: "MaxHermes" | "MaxClaw";
     currentActiveModelName: string;
     realProviders: ProviderInfo[];
-    handleSwitchProvider: (providerKey: string, providerName: string) => void;
+    handleSwitchProvider: (providerKey: string, modelName: string) => void;
     isGenerating: boolean;
     stopGeneration: () => void;
     availableCommands: CommandInfo[];
@@ -29,7 +47,8 @@ interface ChatInputFormProps {
         useReformulate: boolean,
         useHeadless: boolean,
         pastedImages: string[],
-        mode: 'default' | 'thinking' | 'fast'
+        mode: 'default' | 'thinking' | 'fast',
+        model?: string
     ) => void;
 }
 
@@ -63,7 +82,6 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         }
     });
 
-    // SỬA ĐỔI: Khởi tạo state chatMode lưu bền vững qua localStorage
     const [chatMode, setChatMode] = useState<'default' | 'thinking' | 'fast'>(() => {
         try {
             const saved = localStorage.getItem('bridge_chat_mode');
@@ -87,14 +105,29 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         localStorage.setItem('bridge_use_headless', JSON.stringify(useHeadless));
     }, [useHeadless]);
 
-    // SỬA ĐỔI: Lưu lựa chọn chatMode vào bộ nhớ trình duyệt
     useEffect(() => {
         localStorage.setItem('bridge_chat_mode', chatMode);
     }, [chatMode]);
 
-    useEffect(() => {
-        setSuggestIndex(0);
-    }, [filteredSuggests]);
+    const enabledModelOptions = useMemo(() => {
+        const enabledKeys = new Set(realProviders.map(p => p.key));
+        return ALL_MODEL_OPTIONS.filter(opt => enabledKeys.has(opt.provider));
+    }, [realProviders]);
+
+    const handleSelectModelOption = (providerKey: string, modelName: string) => {
+        handleSwitchProvider(providerKey, modelName);
+        setShowModelDropdown(false);
+
+        // Tự động chuyển đổi chế độ chat bám sát Model được chọn
+        let nextMode: 'default' | 'thinking' | 'fast' = 'default';
+        const lowerModel = modelName.toLowerCase();
+        if (lowerModel.includes('max') || lowerModel.includes('reasoner')) {
+            nextMode = 'thinking';
+        } else if (lowerModel.includes('plus') || lowerModel.includes('chat') || lowerModel.includes('mini') || lowerModel.includes('flash')) {
+            nextMode = 'fast';
+        }
+        setChatMode(nextMode);
+    };
 
     const handleInputChange = (val: string) => {
         setInput(val);
@@ -119,8 +152,11 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         e.preventDefault();
         if ((!input.trim() && pastedImages.length === 0) || isGenerating) return;
 
-        // SỬA ĐỔI: Truyền kèm tham số chatMode đã chọn lên hàm callback gửi tin nhắn
-        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode);
+        // Định dạng payload gửi đi kèm theo cấu trúc "providerKey:modelName"
+        const matchedOpt = enabledModelOptions.find(opt => opt.model === currentActiveModelName);
+        const modelPayload = matchedOpt ? `${matchedOpt.provider}:${matchedOpt.model}` : undefined;
+
+        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode, modelPayload);
         setInput('');
         setPastedImages([]);
         setShowCommandSuggest(false);
@@ -185,11 +221,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         <form
             onSubmit={handleSubmit}
             className="p-3 border-t border-zinc-200 bg-zinc-50/50 select-none relative"
-            style={{
-                transform: 'translateZ(0)',
-                willChange: 'transform',
-                // Đã loại bỏ thuộc tính contain: 'content' gây lấp hộp gợi ý
-            }}
+            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
         >
             <AnimatePresence>
                 {showCommandSuggest && (
@@ -234,7 +266,6 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                                 type="button"
                                 onClick={() => setPastedImages((prev) => prev.filter((_, idx) => idx !== index))}
                                 className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[9px] font-bold shadow-md transition-all cursor-pointer border-none"
-                                title="Xóa hình ảnh này"
                             >
                                 ✕
                             </button>
@@ -243,10 +274,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                 </div>
             )}
 
-            <div
-                className="bg-zinc-50 border border-zinc-200 rounded-xl p-2 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-[border-color,box-shadow] duration-200 shadow-sm relative"
-            // Đã loại bỏ thuộc tính contain: 'content' để dropdown chọn Model hiển thị đúng
-            >
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-2 flex flex-col focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-300/30 transition-[border-color,box-shadow] duration-200 shadow-sm relative">
                 <textarea
                     value={input}
                     onChange={(e) => handleInputChange(e.target.value)}
@@ -289,23 +317,23 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                             </button>
 
                             {showModelDropdown && (
-                                <div className="absolute bottom-full left-0 mb-1.5 w-48 bg-white border border-zinc-200 rounded-lg shadow-xl py-1 z-50 text-[11px] font-semibold text-zinc-700">
-                                    <div className="px-2 py-0.5 text-[7px] uppercase tracking-wider text-zinc-400">Nhà cung cấp</div>
-                                    {realProviders.map((p) => (
-                                        <button
-                                            key={p.key}
-                                            type="button"
-                                            onClick={() => {
-                                                handleSwitchProvider(p.key, p.name);
-                                                setShowModelDropdown(false);
-                                            }}
-                                            className={`w-full text-left px-2 py-1 hover:bg-zinc-50 flex items-center justify-between cursor-pointer ${currentActiveModelName === p.name ? "text-blue-600 bg-blue-50 font-bold" : "text-zinc-650"
-                                                }`}
-                                        >
-                                            <span>{p.name}</span>
-                                            {currentActiveModelName === p.name && <span className="text-[8px]">✓</span>}
-                                        </button>
-                                    ))}
+                                <div className="absolute bottom-full left-0 mb-1.5 w-52 bg-white border border-zinc-200 rounded-lg shadow-xl py-1 z-50 text-[11px] font-semibold text-zinc-700 max-h-60 overflow-y-auto">
+                                    <div className="px-2 py-0.5 text-[7px] uppercase tracking-wider text-zinc-400">Chọn AI & Model</div>
+                                    {enabledModelOptions.map((opt) => {
+                                        const isSelected = currentActiveModelName === opt.model;
+                                        return (
+                                            <button
+                                                key={`${opt.provider}-${opt.model}`}
+                                                type="button"
+                                                onClick={() => handleSelectModelOption(opt.provider, opt.model)}
+                                                className={`w-full text-left px-2 py-1 hover:bg-zinc-50 flex items-center justify-between cursor-pointer ${isSelected ? "text-blue-600 bg-blue-50 font-bold" : "text-zinc-655"
+                                                    }`}
+                                            >
+                                                <span>{opt.displayName}</span>
+                                                {isSelected && <span className="text-[8px]">✓</span>}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -349,7 +377,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                                     ? "bg-amber-50 border-amber-200 text-amber-600"
                                     : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
                                 }`}
-                            title="Chế độ hoạt động của Agent: Auto (Tự động) / Thinking (Suy nghĩ sâu) / Fast (Xử lý nhanh)"
+                            title="Chế độ hoạt động của Agent"
                         >
                             {chatMode === 'thinking' ? "🧠 Mode: Thinking" : chatMode === 'fast' ? "⚡ Mode: Fast" : "🤖 Mode: Auto"}
                         </button>

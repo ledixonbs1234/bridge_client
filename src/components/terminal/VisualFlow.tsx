@@ -43,6 +43,155 @@ const nodeTypes = {
     cyberGroup: CyberGroupNode
 };
 
+interface GroupedTimelineEvent {
+    id: string;
+    type: 'log' | 'system' | 'chunk' | 'tool_call';
+    timestamp?: string;
+    content?: string;
+    tool?: string;
+    args?: any;
+    output?: any;
+    hasOutput: boolean;
+}
+
+function CollapsibleToolCall({ event, theme }: { event: any; theme: string }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const isDark = theme === 'dark';
+
+    const argsPairs = useMemo(() => {
+        if (!event.args || typeof event.args !== 'object') return [];
+        return Object.entries(event.args).map(([k, v]) => {
+            const displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            return { key: k, value: displayVal };
+        });
+    }, [event.args]);
+
+    const displayOutput = useMemo(() => {
+        if (!event.output) return '';
+        if (typeof event.output === 'object') {
+            if (event.output.status === 'success' && event.output.data) {
+                return typeof event.output.data === 'object'
+                    ? JSON.stringify(event.output.data, null, 2)
+                    : String(event.output.data);
+            }
+            return JSON.stringify(event.output, null, 2);
+        }
+        return String(event.output);
+    }, [event.output]);
+
+    return (
+        <div className={`border rounded-xl overflow-hidden transition-all duration-200 ${isDark ? 'bg-zinc-900/40 border-zinc-800' : 'bg-zinc-50 border-zinc-200 shadow-xs'
+            }`}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full text-left px-4 py-3 flex items-center justify-between transition-colors cursor-pointer ${isDark ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-100/50'
+                    }`}
+            >
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-base select-none">🛠️</span>
+                        <span className={`text-[11px] font-bold font-mono ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                            Gọi Tool: {event.tool}
+                        </span>
+                    </div>
+                    {argsPairs.length > 0 && (
+                        <div className="pl-6 space-y-0.5 text-[10px] font-mono opacity-80 leading-normal">
+                            {argsPairs.map((p: any) => (
+                                <div key={p.key}>
+                                    <span className="text-zinc-500">{p.key}</span>
+                                    <span className="mx-1 text-zinc-400">→</span>
+                                    <span className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>{p.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 select-none">
+                    <span className="text-[10px] font-bold font-mono text-zinc-400 hover:text-zinc-500">
+                        {isOpen ? 'Thu gọn [-]' : 'Chi tiết [+]'}
+                    </span>
+                </div>
+            </button>
+
+            {isOpen && (
+                <div className={`p-4 border-t space-y-3 text-[11px] font-mono leading-relaxed select-text ${isDark ? 'border-zinc-850 bg-zinc-950/60 text-zinc-300' : 'border-zinc-200 bg-white text-zinc-700'
+                    }`}>
+                    <div className="space-y-1">
+                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider select-none">Tham số đầy đủ:</div>
+                        <pre className={`p-2.5 rounded border max-h-40 overflow-y-auto ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-850'}`}>
+                            {JSON.stringify(event.args || {}, null, 2)}
+                        </pre>
+                    </div>
+
+                    {event.hasOutput && (
+                        <div className="space-y-1">
+                            <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider select-none">Kết quả trả về:</div>
+                            <pre className={`p-2.5 rounded border max-h-60 overflow-y-auto ${isDark ? 'bg-zinc-900 border-zinc-800 text-emerald-400' : 'bg-zinc-50 border-zinc-200 text-emerald-800'}`}>
+                                {displayOutput}
+                            </pre>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function RenderTimeline({ events, theme }: { events: GroupedTimelineEvent[]; theme: string }) {
+    const isDark = theme === 'dark';
+    return (
+        <div className="relative pl-6 space-y-6 text-left">
+            {/* Dashed vertical timeline line */}
+            <div className={`absolute top-2 bottom-2 left-2.5 w-0.5 border-l-2 border-dashed ${isDark ? 'border-zinc-800' : 'border-zinc-200'
+                }`} />
+
+            {events.map((evt) => {
+                let icon = '🟢';
+                let bgClass = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-zinc-200';
+                if (evt.type === 'log') icon = '🧠';
+                else if (evt.type === 'system') icon = 'ℹ️';
+                else if (evt.type === 'chunk') icon = '🤖';
+                else if (evt.type === 'tool_call') icon = '🛠️';
+
+                return (
+                    <div key={evt.id} className="relative">
+                        {/* Dot on timeline */}
+                        <div className={`absolute -left-[23px] top-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs select-none shadow-sm border ${bgClass}`}>
+                            {icon}
+                        </div>
+
+                        {/* Content */}
+                        <div className="space-y-1">
+                            {evt.type === 'log' && (
+                                <div className={`text-xs italic font-mono pl-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                                    {evt.content}
+                                </div>
+                            )}
+
+                            {evt.type === 'system' && (
+                                <div className={`text-xs font-bold pl-1 font-mono ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                                    {evt.content}
+                                </div>
+                            )}
+
+                            {evt.type === 'chunk' && (
+                                <div className={`p-4 border rounded-xl select-text ${isDark ? 'bg-zinc-900/30 border-zinc-800' : 'bg-zinc-50/50 border-zinc-200'}`}>
+                                    <TimelineTextBlock content={evt.content || ''} theme={theme as 'light' | 'dark'} />
+                                </div>
+                            )}
+
+                            {evt.type === 'tool_call' && (
+                                <CollapsibleToolCall event={evt} theme={theme} />
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 interface VisualFlowProps {
     activeAgent: "MaxHermes" | "MaxClaw";
     activeModel: string;
@@ -52,8 +201,8 @@ interface VisualFlowProps {
     onViewDiff?: (filePath: string) => void;
     theme: "light" | "dark";
     setTheme: React.Dispatch<React.SetStateAction<"light" | "dark">>;
+    fetchWorkspace: () => void;
 }
-
 export function VisualFlow(props: VisualFlowProps) {
     return (
         <ReactFlowProvider>
@@ -61,6 +210,62 @@ export function VisualFlow(props: VisualFlowProps) {
         </ReactFlowProvider>
     );
 }
+// Thêm hàm này phía trên component VisualFlowInner
+const mapLiveTimelineToAccumulator = (timeline: any[]) => {
+    const accumulator: any[] = [];
+    if (!timeline || !Array.isArray(timeline)) return accumulator;
+
+    timeline.forEach(item => {
+        if (item.type === 'text' && item.content) {
+            accumulator.push({
+                type: 'chunk',
+                content: item.content
+            });
+        } else if (item.type === 'steps' && item.steps) {
+            item.steps.forEach((step: any) => {
+                if (step.type === 'thinking') {
+                    accumulator.push({
+                        type: 'log',
+                        content: step.input
+                    });
+                } else {
+                    // Cấu trúc hóa hành động gọi Tool
+                    let parsedArgs = {};
+                    if (step.input) {
+                        try {
+                            const trimmed = step.input.trim();
+                            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                                parsedArgs = JSON.parse(trimmed);
+                            } else {
+                                parsedArgs = { "arguments": step.input };
+                            }
+                        } catch {
+                            parsedArgs = { "arguments": step.input };
+                        }
+                    }
+
+                    accumulator.push({
+                        type: 'action',
+                        tool: step.toolName || step.title,
+                        args: parsedArgs,
+                        step_id: step.id
+                    });
+
+                    if (step.output) {
+                        accumulator.push({
+                            type: 'tool_output',
+                            step_id: step.id,
+                            output: step.output
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+    return accumulator;
+};
+
 
 function VisualFlowInner({
     activeAgent,
@@ -70,7 +275,8 @@ function VisualFlowInner({
     workspaceData,
     onViewDiff,
     theme,
-    setTheme
+    setTheme,
+    fetchWorkspace
 }: VisualFlowProps) {
     const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration } = sse;
 
@@ -145,30 +351,40 @@ function VisualFlowInner({
             });
     }, []);
 
-    const handleSwitchProvider = (providerKey: string, providerName: string) => {
-        fetch('/api/provider/switch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ provider: providerKey })
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) setActiveModel(providerName);
-            });
-    };
+
+
+    // Tự động tìm kiếm và đồng bộ hóa trạng thái mới nhất từ danh sách nodes động
+    const activeSelectedNode = useMemo(() => {
+        if (!selectedNode) return null;
+        return nodes.find((n) => n.id === selectedNode.id) || selectedNode;
+    }, [nodes, selectedNode]);
 
     const lastAssistantMessage = useMemo(() => {
         return [...messages].reverse().find(m => m.role === 'assistant');
     }, [messages]);
 
-    const inspectorHtml = useMemo(() => {
-        if (!selectedNode || !selectedNode.data.content) return '';
-        try {
-            return marked.parse(selectedNode.data.content) as string;
-        } catch (e) {
-            return selectedNode.data.content;
+    const parsedSummaryList = useMemo(() => {
+        if (!activeSelectedNode || !activeSelectedNode.data.content) return null;
+        const content = activeSelectedNode.data.content.trim();
+        if (content.startsWith('[') && content.endsWith(']')) {
+            try {
+                return JSON.parse(content);
+            } catch (e) {
+                return null;
+            }
         }
-    }, [selectedNode]);
+        return null;
+    }, [activeSelectedNode]);
+
+    const inspectorHtml = useMemo(() => {
+        if (!activeSelectedNode || !activeSelectedNode.data.content) return '';
+        try {
+            return marked.parse(activeSelectedNode.data.content) as string;
+        } catch (e) {
+            return activeSelectedNode.data.content;
+        }
+    }, [activeSelectedNode]);
+
 
     const filteredMessages = useMemo(() => {
         if (viewMode === 'full') return messages;
@@ -209,6 +425,24 @@ function VisualFlowInner({
     const handleResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         resizeStart.current = null;
         e.currentTarget.releasePointerCapture(e.pointerId);
+    };
+
+    // filepath: ridge_client/src/components/terminal/VisualFlow.tsx
+
+    const handleSwitchProvider = (providerKey: string, modelName: string) => {
+        fetch('/api/provider/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: providerKey, model: modelName })
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    setActiveModel(modelName);
+                    fetchWorkspace(); // Gọi đồng bộ thông tin mới về ngay lập tức
+                }
+            })
+            .catch((err) => console.error("Lỗi chuyển đổi provider ở VisualFlow:", err));
     };
 
     // ĐỒNG BỘ ĐỒ THỊ KHI ĐANG CHẠY THỜI GIAN THỰC
@@ -280,6 +514,11 @@ function VisualFlowInner({
             });
         }
 
+        const activeNodeName = runningStepKey ||
+            currentStepMap.find(s => s.state === 'RUNNING')?.step_key ||
+            currentStepMap.find(s => s.state === 'PENDING')?.step_key ||
+            initialNode;
+
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
             const position = calculatedPositions[nodeName] || { x: 300, y: 150 };
             const dbState = currentStepMap.find(s => s.step_key === nodeName);
@@ -294,6 +533,37 @@ function VisualFlowInner({
 
             const isValidator = nodeVal.type === 'validator';
 
+            // Phân tách bối cảnh: Nếu là node đang chạy và có tin nhắn SSE, tiến hành dựng live summary stream
+            let content = dbState ? dbState.summary : "";
+            if (nodeName === activeNodeName && messages.length > 0) {
+                const turns: any[] = [];
+                let tempUserContent = "";
+
+                messages.forEach((msg, idx) => {
+                    if (msg.role === 'user') {
+                        tempUserContent = msg.content;
+                    } else if (msg.role === 'assistant') {
+                        // Tái dựng timeline dựa trên thông điệp trực tiếp
+                        const timeline = msg.timeline || (msg.steps && msg.steps.length > 0 ? [{ id: `reconstructed-${idx}`, type: 'steps', steps: msg.steps }] : []);
+                        const accum = mapLiveTimelineToAccumulator(timeline);
+                        turns.push({
+                            query: tempUserContent || "(Không có prompt)",
+                            accumulator: accum
+                        });
+                    }
+                });
+
+                // Hỗ trợ cập nhật real-time khi user vừa gửi tin nhắn và assistant đang chuẩn bị phản hồi
+                if (messages[messages.length - 1]?.role === 'user') {
+                    turns.push({
+                        query: messages[messages.length - 1].content,
+                        accumulator: []
+                    });
+                }
+
+                content = JSON.stringify(turns);
+            }
+
             nodesList.push({
                 id: nodeName,
                 type: isValidator ? 'cyberValidator' : 'cyberAgent',
@@ -303,7 +573,7 @@ function VisualFlowInner({
                     role: isValidator ? "Strict Quality Gate" : "Specialist Worker Node",
                     model: workspaceData.provider.model || "Local Engine",
                     state: stateString,
-                    content: dbState ? dbState.summary : ""
+                    content: content
                 },
                 position: {
                     x: lastUserMsg ? position.x + 300 : position.x,
@@ -541,15 +811,15 @@ function VisualFlowInner({
                 <div className="absolute bottom-4 left-4 right-4 z-50 max-w-4xl mx-auto select-none pointer-events-auto">
                     <ChatInputForm
                         activeAgent={activeAgent}
-                        currentActiveModelName={workspaceData?.provider?.name || activeModel}
+                        currentActiveModelName={activeModel} // Sử dụng activeModel để cập nhật tức thì trên UI
                         realProviders={realProviders}
                         handleSwitchProvider={handleSwitchProvider}
                         isGenerating={isGenerating}
                         stopGeneration={stopGeneration}
                         availableCommands={availableCommands}
-                        onSendMessage={(prompt, useRef, useHeadless, images, mode) => {
+                        onSendMessage={(prompt, useRef, useHeadless, images, mode, selectedModel) => {
                             setSelectedNode(null);
-                            sendPrompt(prompt, useRef, images, activeAgent, activeModel, useHeadless, mode);
+                            sendPrompt(prompt, useRef, images, activeAgent, selectedModel || activeModel, useHeadless, mode);
                         }}
                     />
                 </div>
@@ -721,16 +991,105 @@ function VisualFlowInner({
                                             <div>• Role: <span className="font-semibold" style={{ color: theme === 'dark' ? '#e4e4e7' : '#3f3f46' }}>{selectedNode.data.role}</span></div>
                                         </div>
                                         {selectedNode.data.content && (
-                                            <div className="space-y-1">
-                                                <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-amber-500' : 'text-amber-600'}`}>🧠 THOUGHT PROCESS / RESPONSE:</div>
-                                                <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
-                                                    }`}>
-                                                    <div
-                                                        className={`text-[14px] leading-relaxed select-text ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
-                                                            }`}
-                                                        dangerouslySetInnerHTML={{ __html: inspectorHtml }}
-                                                    />
-                                                </div>
+                                            <div className="space-y-4">
+                                                {parsedSummaryList && Array.isArray(parsedSummaryList) ? (
+                                                    <div className="space-y-6 divide-y divide-zinc-200/40 dark:divide-zinc-800/40">
+                                                        {parsedSummaryList.map((turn: any, tIdx: number) => {
+                                                            // Nhóm và phân loại các sự kiện Timeline một cách trực quan
+                                                            // Nhóm và phân loại các sự kiện Timeline một cách trực quan
+                                                            const timelineEvents: GroupedTimelineEvent[] = [];
+                                                            const toolCallMap = new Map<string, GroupedTimelineEvent>();
+
+                                                            if (Array.isArray(turn.accumulator)) {
+                                                                turn.accumulator.forEach((evt: any) => {
+                                                                    if (evt.type === 'action') {
+                                                                        const groupEvt: GroupedTimelineEvent = {
+                                                                            id: evt.step_id || `tool-${Math.random()}`,
+                                                                            type: 'tool_call',
+                                                                            tool: evt.tool,
+                                                                            args: evt.args,
+                                                                            timestamp: evt.timestamp,
+                                                                            hasOutput: false
+                                                                        };
+                                                                        timelineEvents.push(groupEvt);
+                                                                        if (evt.step_id) {
+                                                                            toolCallMap.set(evt.step_id, groupEvt);
+                                                                        }
+                                                                    } else if (evt.type === 'tool_output') {
+                                                                        const existing = evt.step_id ? toolCallMap.get(evt.step_id) : null;
+                                                                        if (existing) {
+                                                                            existing.output = evt.output;
+                                                                            existing.hasOutput = true;
+                                                                        } else {
+                                                                            timelineEvents.push({
+                                                                                id: evt.step_id || `output-${Math.random()}`,
+                                                                                type: 'tool_call',
+                                                                                tool: 'Unknown Tool',
+                                                                                output: evt.output,
+                                                                                timestamp: evt.timestamp,
+                                                                                hasOutput: true
+                                                                            });
+                                                                        }
+                                                                    } else {
+                                                                        // Thu hẹp kiểu dữ liệu an toàn để tránh cảnh báo kiểu dữ liệu string từ TypeScript
+                                                                        const typeMapping: 'log' | 'system' | 'chunk' =
+                                                                            (evt.type === 'log' || evt.type === 'system' || evt.type === 'chunk')
+                                                                                ? evt.type
+                                                                                : 'log';
+
+                                                                        timelineEvents.push({
+                                                                            id: `evt-${Math.random()}`,
+                                                                            type: typeMapping,
+                                                                            content: evt.content,
+                                                                            timestamp: evt.timestamp,
+                                                                            hasOutput: false
+                                                                        });
+                                                                    }
+                                                                });
+                                                            } else if (typeof turn.accumulator === 'string') {
+                                                                // Tương thích ngược với các bản ghi dạng chuỗi thô cũ
+                                                                timelineEvents.push({
+                                                                    id: `legacy-${Math.random()}`,
+                                                                    type: 'chunk',
+                                                                    content: turn.accumulator,
+                                                                    hasOutput: false
+                                                                });
+                                                            }
+
+                                                            return (
+                                                                <div key={tIdx} className={`space-y-3.5 ${tIdx > 0 ? 'pt-6' : ''}`}>
+                                                                    {/* Tách bạch câu hỏi của người dùng */}
+                                                                    <div className="space-y-1">
+                                                                        <div className={`text-[10px] font-bold font-mono tracking-wider ${theme === 'dark' ? 'text-cyan-400' : 'text-cyan-600'}`}>💬 USER PROMPT:</div>
+                                                                        <div className={`p-3 rounded-xl border text-[13px] leading-relaxed font-sans select-text whitespace-pre-wrap ${theme === 'dark' ? 'bg-zinc-900/60 border-zinc-800/80 text-zinc-200' : 'bg-zinc-50 border-zinc-200 text-zinc-700'}`}>
+                                                                            {turn.query}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Tách bạch và hiển thị sơ đồ Timeline tiến trình */}
+                                                                    {timelineEvents.length > 0 && (
+                                                                        <div className="space-y-2">
+                                                                            <div className={`text-[10px] font-bold font-mono tracking-wider ${theme === 'dark' ? 'text-amber-500' : 'text-amber-600'}`}>🧠 INTERACTIVE TIMELINE:</div>
+                                                                            <RenderTimeline events={timelineEvents} theme={theme} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        <div className={`text-xs font-bold select-none font-mono ${theme === 'dark' ? 'text-amber-500' : 'text-amber-600'}`}>🧠 THOUGHT PROCESS / RESPONSE:</div>
+                                                        <div className={`p-4 border rounded-xl transition-colors duration-200 ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'
+                                                            }`}>
+                                                            <div
+                                                                className={`text-[14px] leading-relaxed select-text ${theme === 'dark' ? 'markdown-body-dark' : 'markdown-body'
+                                                                    }`}
+                                                                dangerouslySetInnerHTML={{ __html: inspectorHtml }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
