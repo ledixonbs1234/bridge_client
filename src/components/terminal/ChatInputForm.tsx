@@ -1,4 +1,4 @@
-// filepath: ridge_client/src/components/terminal/ChatInputForm.tsx
+// filepath: bridge_client/src/components/terminal/ChatInputForm.tsx
 import * as React from "react";
 import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -63,6 +63,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
     onSendMessage
 }: ChatInputFormProps) {
     const [input, setInput] = useState('');
+    const [isPaused, setIsPaused] = useState(false);
 
     const [useReformulate, setUseReformulate] = useState(() => {
         try {
@@ -109,6 +110,14 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         localStorage.setItem('bridge_chat_mode', chatMode);
     }, [chatMode]);
 
+    // Tự động kiểm tra và reset trạng thái tạm dừng khi tiến trình AI dừng hoạt động
+    useEffect(() => {
+        if (!isGenerating) {
+            setIsPaused(false);
+            fetch('/api/agent/resume', { method: 'POST' }).catch(() => { });
+        }
+    }, [isGenerating]);
+
     const enabledModelOptions = useMemo(() => {
         const enabledKeys = new Set(realProviders.map(p => p.key));
         return ALL_MODEL_OPTIONS.filter(opt => enabledKeys.has(opt.provider));
@@ -118,7 +127,6 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         handleSwitchProvider(providerKey, modelName);
         setShowModelDropdown(false);
 
-        // Tự động chuyển đổi chế độ chat bám sát Model được chọn
         let nextMode: 'default' | 'thinking' | 'fast' = 'default';
         const lowerModel = modelName.toLowerCase();
         if (lowerModel.includes('max') || lowerModel.includes('reasoner')) {
@@ -127,6 +135,19 @@ export const ChatInputForm = React.memo(function ChatInputForm({
             nextMode = 'fast';
         }
         setChatMode(nextMode);
+    };
+
+    const handleTogglePause = async () => {
+        const endpoint = isPaused ? '/api/agent/resume' : '/api/agent/pause';
+        try {
+            const res = await fetch(endpoint, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                setIsPaused(data.isPaused);
+            }
+        } catch (err) {
+            console.error("Lỗi khi thay đổi trạng thái tạm dừng:", err);
+        }
     };
 
     const handleInputChange = (val: string) => {
@@ -152,7 +173,6 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         e.preventDefault();
         if ((!input.trim() && pastedImages.length === 0) || isGenerating) return;
 
-        // Định dạng payload gửi đi kèm theo cấu trúc "providerKey:modelName"
         const matchedOpt = enabledModelOptions.find(opt => opt.model === currentActiveModelName);
         const modelPayload = matchedOpt ? `${matchedOpt.provider}:${matchedOpt.model}` : undefined;
 
@@ -381,6 +401,21 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                         >
                             {chatMode === 'thinking' ? "🧠 Mode: Thinking" : chatMode === 'fast' ? "⚡ Mode: Fast" : "🤖 Mode: Auto"}
                         </button>
+
+                        {/* ⏸️ NÚT ĐIỀU KHIỂN PAUSE/RESUME KHI ĐANG GENERATING */}
+                        {isGenerating && (
+                            <button
+                                type="button"
+                                onClick={handleTogglePause}
+                                className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${isPaused
+                                    ? "bg-emerald-50 border-emerald-300 text-emerald-600 animate-pulse font-extrabold"
+                                    : "bg-amber-50 border-amber-300 text-amber-600"
+                                    }`}
+                                title={isPaused ? "Bấm để tiếp tục chạy" : "Tạm dừng xử lý (Breakpoint trước Tool Call)"}
+                            >
+                                {isPaused ? "▶ Resume" : "⏸ Pause"}
+                            </button>
+                        )}
                     </div>
 
                     <button
