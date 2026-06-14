@@ -1,6 +1,6 @@
 // filepath: bridge_client/src/components/terminal/TraceNodeInspector.tsx
 import * as React from "react";
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { Node } from "reactflow";
 import { marked } from "marked";
 import { StructuredQuestionsForm } from "./StructuredQuestionsForm";
@@ -24,12 +24,23 @@ export function TraceNodeInspector({
     pendingPermission,
     respondToPermission
 }: TraceNodeInspectorProps) {
-    if (!selectedNode) return null;
+    const modalScrollRef = useRef<HTMLDivElement>(null);
 
-    const isDark = theme === "dark";
+    // 1. Hook useEffect: Luôn khai báo unconditionally ở trên cùng
+    useEffect(() => {
+        if (selectedNode && modalScrollRef.current) {
+            const timer = setTimeout(() => {
+                if (modalScrollRef.current) {
+                    modalScrollRef.current.scrollTop = modalScrollRef.current.scrollHeight;
+                }
+            }, 60);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedNode?.id, selectedNode?.data?.content]);
 
+    // 2. Hook useMemo thứ nhất: Thêm kiểm tra an toàn selectedNode
     const parsedSummaryList = useMemo(() => {
-        if (!selectedNode.data?.content) return null;
+        if (!selectedNode || !selectedNode.data?.content) return null;
         const content = selectedNode.data.content.trim();
         if (content.startsWith('[') && content.endsWith(']')) {
             try {
@@ -41,14 +52,20 @@ export function TraceNodeInspector({
         return null;
     }, [selectedNode]);
 
+    // 3. Hook useMemo thứ hai: Thêm kiểm tra an toàn selectedNode
     const inspectorHtml = useMemo(() => {
-        if (!selectedNode.data?.content) return "";
+        if (!selectedNode || !selectedNode.data?.content) return "";
         try {
             return marked.parse(selectedNode.data.content) as string;
         } catch {
             return selectedNode.data.content;
         }
     }, [selectedNode]);
+
+    // CHỐT CHẶN: Chỉ đặt câu lệnh trả về sớm (conditional return) tại đây, SAU KHI tất cả Hooks đã khai báo xong
+    if (!selectedNode) return null;
+
+    const isDark = theme === "dark";
 
     return (
         <div
@@ -80,16 +97,20 @@ export function TraceNodeInspector({
                     <button
                         onClick={() => setSelectedNode(null)}
                         className={`px-3.5 py-1.5 border rounded-lg text-xs font-mono font-bold cursor-pointer transition-colors ${isDark
-                                ? "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white"
-                                : "bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 hover:text-zinc-900"
+                            ? "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400 hover:text-white"
+                            : "bg-white hover:bg-zinc-100 border-zinc-200 text-zinc-700 hover:text-zinc-900"
                             }`}
                     >
                         CLOSE [Esc]
                     </button>
                 </div>
 
-                <div className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${isDark ? "bg-[#020204]" : "bg-white"
-                    }`}>
+                {/* Container cuộn chính - Đã liên kết ref để auto-scroll */}
+                <div
+                    ref={modalScrollRef}
+                    className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${isDark ? "bg-[#020204]" : "bg-white"
+                        }`}
+                >
                     <div className={`flex justify-between items-start flex-wrap gap-2 border-b pb-4 ${isDark ? "border-zinc-900" : "border-zinc-100"
                         }`}>
                         <div>
@@ -202,7 +223,7 @@ export function TraceNodeInspector({
 
                     {selectedNode.type === "cyberTool" && (
                         <div className="space-y-4">
-                            <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                            <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${isDark ? "text-zinc-400" : "text-zinc-655"}`}>
                                 <div>• Tool: <span className="font-bold text-orange-500">{selectedNode.data.tool}</span></div>
                                 <div>• Description: <span className="font-semibold">{selectedNode.data.title}</span></div>
                             </div>

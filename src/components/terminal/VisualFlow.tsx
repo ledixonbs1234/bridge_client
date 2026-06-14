@@ -333,6 +333,12 @@ function VisualFlowInner({
         }
     }, [nodeStructureKey, fitView]);
 
+    // Lắng nghe sự thay đổi của danh sách nodes động để liên tục cập nhật dữ liệu real-time lên modal inspector
+    const activeSelectedNode = useMemo(() => {
+        if (!selectedNode) return null;
+        return nodes.find((n) => n.id === selectedNode.id) || selectedNode;
+    }, [nodes, selectedNode]);
+
     const isDark = theme === "dark";
 
     return (
@@ -459,7 +465,7 @@ function VisualFlowInner({
 
             {/* RENDER MODULAR TRACE INSPECTOR MODAL */}
             <TraceNodeInspector
-                selectedNode={selectedNode}
+                selectedNode={activeSelectedNode} // Đã sửa đổi: Đồng bộ sang activeSelectedNode để hỗ trợ streaming
                 setSelectedNode={setSelectedNode}
                 theme={theme}
                 onViewDiff={onViewDiff}
