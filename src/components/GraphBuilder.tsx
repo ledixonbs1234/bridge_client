@@ -45,6 +45,7 @@ interface EditableNodeData {
     next_on_success?: string;
     next_on_failure?: string;
     theme?: "light" | "dark";
+    include_global_prompt?: boolean; // <-- Thêm dòng này
 }
 
 interface GraphBuilderProps {
@@ -683,6 +684,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                 system_prompt: "Chỉ thị hệ thống cho Agent mới...",
                 tools: [],
                 model_mode: "fast",
+                include_global_prompt: true, // <-- Thêm dòng này
                 theme: theme
             } : {
                 name: id,
@@ -809,7 +811,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     type: "agent",
                     system_prompt: d.system_prompt,
                     tools: d.tools,
-                    model_mode: d.model_mode
+                    model_mode: d.model_mode,
+                    include_global_prompt: d.include_global_prompt !== false // <-- Thêm dòng này
                 };
             } else {
                 const outEdges = edges.filter(e => e.source === n.id);
@@ -1234,7 +1237,18 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                                             <option value="thinking">🧠 DeepThink (Suy nghĩ sâu)</option>
                                         </select>
                                     </div>
-
+                                    <div className={`space-y-1.5 shrink-0 flex items-center justify-between p-2.5 rounded-lg border transition-colors ${isDark ? "bg-zinc-950 border-zinc-850" : "bg-zinc-50 border-zinc-150"}`}>
+                                        <label htmlFor="include-global-prompt-chk" className="text-[10px] font-bold text-zinc-450 uppercase cursor-pointer select-none">
+                                            Kế thừa system_prompt.md toàn cục
+                                        </label>
+                                        <input
+                                            id="include-global-prompt-chk"
+                                            type="checkbox"
+                                            checked={selectedNode.data.include_global_prompt !== false}
+                                            onChange={(e) => handleUpdateSelectedNodeData({ include_global_prompt: e.target.checked })}
+                                            className="w-3.5 h-3.5 text-blue-600 bg-white border-zinc-300 rounded focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </div>
                                     <div className="space-y-1 flex-1 flex flex-col min-h-0">
                                         <label className="text-[10px] font-bold text-zinc-400 uppercase">System Prompt (Chỉ thị hệ thống)</label>
                                         <textarea
