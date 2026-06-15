@@ -48,7 +48,9 @@ interface ChatInputFormProps {
         useHeadless: boolean,
         pastedImages: string[],
         mode: 'default' | 'thinking' | 'fast',
-        model?: string
+        model?: string,
+        useGitIsolation?: boolean,
+        useGitFooter?: boolean // Thêm tùy chọn bật/tắt footer
     ) => void;
 }
 
@@ -92,6 +94,24 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         }
     });
 
+    const [useGitIsolation, setUseGitIsolation] = useState(() => {
+        try {
+            const saved = localStorage.getItem('bridge_use_git_isolation');
+            return saved !== null ? JSON.parse(saved) : true;
+        } catch {
+            return true;
+        }
+    });
+
+    const [useGitFooter, setUseGitFooter] = useState(() => {
+        try {
+            const saved = localStorage.getItem('bridge_use_git_footer');
+            return saved !== null ? JSON.parse(saved) : true;
+        } catch {
+            return true;
+        }
+    });
+
     const [pastedImages, setPastedImages] = useState<string[]>([]);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [showCommandSuggest, setShowCommandSuggest] = useState(false);
@@ -109,6 +129,14 @@ export const ChatInputForm = React.memo(function ChatInputForm({
     useEffect(() => {
         localStorage.setItem('bridge_chat_mode', chatMode);
     }, [chatMode]);
+
+    useEffect(() => {
+        localStorage.setItem('bridge_use_git_isolation', JSON.stringify(useGitIsolation));
+    }, [useGitIsolation]);
+
+    useEffect(() => {
+        localStorage.setItem('bridge_use_git_footer', JSON.stringify(useGitFooter));
+    }, [useGitFooter]);
 
     // Tự động kiểm tra và reset trạng thái tạm dừng khi tiến trình AI dừng hoạt động
     useEffect(() => {
@@ -176,7 +204,7 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         const matchedOpt = enabledModelOptions.find(opt => opt.model === currentActiveModelName);
         const modelPayload = matchedOpt ? `${matchedOpt.provider}:${matchedOpt.model}` : undefined;
 
-        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode, modelPayload);
+        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode, modelPayload, useGitIsolation, useGitFooter);
         setInput('');
         setPastedImages([]);
         setShowCommandSuggest(false);
@@ -375,11 +403,35 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                             onClick={() => setUseHeadless(!useHeadless)}
                             className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${useHeadless
                                 ? "bg-indigo-50 border-indigo-200 text-indigo-600"
-                                : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
+                                : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-655 hover:bg-zinc-50"
                                 }`}
                             title="Chạy trình duyệt ẩn danh không giao diện"
                         >
                             ⚡ Headless: {useHeadless ? "ON" : "OFF"}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setUseGitIsolation(!useGitIsolation)}
+                            className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${useGitIsolation
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                                : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-655 hover:bg-zinc-50"
+                                }`}
+                            title="Tự động cô lập các sửa đổi file sang nhánh Git tạm"
+                        >
+                            ☘️ Git: {useGitIsolation ? "ON" : "OFF"}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setUseGitFooter(!useGitFooter)}
+                            className={`h-8 px-2.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer select-none flex items-center justify-center ${useGitFooter
+                                ? "bg-amber-50 border-amber-200 text-amber-600 font-extrabold"
+                                : "bg-white border-zinc-200 text-zinc-400 hover:text-zinc-655 hover:bg-zinc-50"
+                                }`}
+                            title="Đính kèm bối cảnh Git & Workspace tối giản vào cuối tin nhắn"
+                        >
+                            📌 Footer: {useGitFooter ? "ON" : "OFF"}
                         </button>
 
                         <button

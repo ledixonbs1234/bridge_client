@@ -105,7 +105,9 @@ export function useSSE(onGenerationComplete?: () => void) {
     agent?: string,
     model?: string,
     headless?: boolean,
-    mode?: 'default' | 'thinking' | 'fast'
+    mode?: 'default' | 'thinking' | 'fast',
+    useGitIsolation?: boolean,
+    useGitFooter?: boolean
   ) => {
     setIsGenerating(true);
     setPendingPermission(null);
@@ -131,7 +133,9 @@ export function useSSE(onGenerationComplete?: () => void) {
           agent,
           model,
           headless,
-          mode
+          mode,
+          useGitIsolation,
+          useGitFooter
         }),
         signal: abortControllerRef.current.signal,
       });

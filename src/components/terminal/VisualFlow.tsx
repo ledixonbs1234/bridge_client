@@ -427,9 +427,9 @@ function VisualFlowInner({
                         isGenerating={isGenerating}
                         stopGeneration={stopGeneration}
                         availableCommands={availableCommands}
-                        onSendMessage={(prompt, useRefMode, useHeadless, images, mode, selectedModel) => {
+                        onSendMessage={(prompt, useRefMode, useHeadless, images, mode, selectedModel, useGitIsolation, useGitFooter) => {
                             setSelectedNode(null);
-                            sendPrompt(prompt, useRefMode, images, activeAgent, selectedModel || activeModel, useHeadless, mode);
+                            sendPrompt(prompt, useRefMode, images, activeAgent, selectedModel || activeModel, useHeadless, mode, useGitIsolation, useGitFooter);
                         }}
                     />
                 </div>
