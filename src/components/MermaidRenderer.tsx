@@ -3,21 +3,21 @@ import { createPortal } from 'react-dom';
 import { Button } from './animate-ui/button';
 import { motion, AnimatePresence } from 'motion/react';
 
-// 1. XÓA dòng import tĩnh này:
-// import mermaid from 'mermaid';
-
-// 2. KHAI BÁO hàm tải động mermaid để tái sử dụng
-let mermaidInstance: any = null;
+// Sử dụng caching qua Promise thay vì raw instance để ngăn chặn triệt để race condition khi render song song
+let mermaidPromise: Promise<any> | null = null;
 async function getMermaid() {
-  if (mermaidInstance) return mermaidInstance;
-  const m = (await import('mermaid')).default;
-  m.initialize({
-    startOnLoad: false,
-    theme: 'default',
-    securityLevel: 'loose',
-  });
-  mermaidInstance = m;
-  return m;
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((m) => {
+      const defaultMermaid = m.default;
+      defaultMermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+      });
+      return defaultMermaid;
+    });
+  }
+  return mermaidPromise;
 }
 
 interface MermaidRendererProps {
@@ -39,7 +39,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
   const dragStart = useRef({ x: 0, y: 0 });
   const startOffset = useRef({ x: 0, y: 0 });
 
-  // 3. SỬA ĐỔI useEffect để sử dụng cơ chế tải chậm (lazy load)
   useEffect(() => {
     let active = true;
 
@@ -47,7 +46,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
       try {
         setError(null);
 
-        // Gọi hàm tải động thay vì gọi trực tiếp từ import tĩnh
         const m = await getMermaid();
         await m.parse(code);
 
@@ -72,14 +70,12 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
     };
   }, [code]);
 
-  // Giải quyết trạng thái dọn dẹp kích thước khi tắt modal
   useEffect(() => {
     if (!isMaximized) {
       setNaturalSize(null);
     }
   }, [isMaximized]);
 
-  // SỬA ĐỔI: Thuật toán tự động Fit bám sát hệ tọa độ logic nội bộ của SVG và phá bỏ co hẹp CSS
   useEffect(() => {
     if (!isMaximized || !viewportRef.current || !svgHtml) return;
 
@@ -87,15 +83,12 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
     const svg = container.querySelector('svg');
     if (!svg) return;
 
-    // Đọc kích thước gốc từ các thuộc tính do Mermaid sinh ra
     const svgWidthAttr = svg.getAttribute('width');
     const svgHeightAttr = svg.getAttribute('height');
 
-    // 1. Ưu tiên viewBox vì nó định nghĩa chính xác hệ tọa độ logic bên trong của sơ đồ
     let svgWidth = svg.viewBox?.baseVal?.width;
     let svgHeight = svg.viewBox?.baseVal?.height;
 
-    // 2. Dự phòng: Đọc thuộc tính width/height nếu không phải là tỷ lệ phần trăm (%)
     if (!svgWidth && svgWidthAttr && !svgWidthAttr.includes('%')) {
       svgWidth = parseFloat(svgWidthAttr);
     }
@@ -103,22 +96,17 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
       svgHeight = parseFloat(svgHeightAttr);
     }
 
-    // 3. Dự phòng cuối: Tự đo đạc kích thước client thực tế
     if (!svgWidth) svgWidth = svg.clientWidth || 800;
     if (!svgHeight) svgHeight = svg.clientHeight || 600;
 
-    // Lưu kích thước cố định này để áp cứng vào Inline Style của khối container
     setNaturalSize({ width: svgWidth, height: svgHeight });
 
-    const containerWidth = container.clientWidth - 48; // Trừ bớt padding
+    const containerWidth = container.clientWidth - 48;
     const containerHeight = container.clientHeight - 48;
 
     if (svgWidth && svgHeight && containerWidth && containerHeight) {
       const scaleX = containerWidth / svgWidth;
       const scaleY = containerHeight / svgHeight;
-
-      // Chọn tỉ lệ nhỏ hơn để toàn bộ sơ đồ nằm trọn vẹn trong viewport
-      // SỬA LỖI: Loại bỏ hoàn toàn giới hạn trần Math.min(1.5, ...) để sơ đồ nhỏ có thể tự động giãn lấp đầy màn hình lớn
       const fitScale = Math.min(scaleX, scaleY);
       setScale(fitScale);
     } else {
@@ -133,12 +121,11 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const zoomSpeed = 0.25; // SỬA: Tăng tốc độ zoom từ 0.08 lên 0.25 để đỡ phải cuộn nhiều
+      const zoomSpeed = 0.25;
       const direction = e.deltaY < 0 ? 1 : -1;
 
       setScale(prev => {
         const next = prev + direction * zoomSpeed;
-        // SỬA: Thay đổi giới hạn zoom tối đa thành 17.0 (1700%) và tối thiểu là 0.1 (10%)
         return Math.min(17, Math.max(0.1, next));
       });
     };
@@ -186,7 +173,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
     setIsMaximized(true);
   };
 
-  // SỬA ĐỔI: Reset view bám sát cấu trúc kích thước logic của sơ đồ
   const handleResetView = () => {
     const container = viewportRef.current;
     if (!container || !naturalSize) {
@@ -243,7 +229,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
 
   return (
     <div className="relative group/mermaid bg-zinc-50 border border-zinc-200 rounded-xl p-4 my-3 shadow-inner">
-      {/* Action Toolbar on Hover */}
       <div className="absolute top-2 right-2 opacity-0 group-hover/mermaid:opacity-100 transition-opacity duration-200 flex gap-1.5 z-10">
         <button
           onClick={handleCopy}
@@ -268,7 +253,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
         </button>
       </div>
 
-      {/* Render diagram container */}
       <div className="overflow-auto flex justify-center items-center min-h-[100px]">
         {svgHtml ? (
           <div
@@ -281,7 +265,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
         )}
       </div>
 
-      {/* LIGHTBOX ADVANCED LIGHTBOX MODAL */}
       {createPortal(
         <AnimatePresence>
           {isMaximized && (
@@ -291,7 +274,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-white/95 z-[9999] flex flex-col p-6 backdrop-blur-md select-none text-zinc-800"
             >
-              {/* Lightbox Header */}
               <div className="flex justify-between items-center mb-4 border-b border-zinc-200 pb-3">
                 <div>
                   <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
@@ -338,7 +320,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
                 </div>
               </div>
 
-              {/* Grid blueprint background for technical rendering */}
               <div
                 ref={viewportRef}
                 onPointerDown={handlePointerDown}
@@ -354,7 +335,6 @@ export function MermaidRenderer({ code }: MermaidRendererProps) {
                 className={`flex-1 overflow-hidden flex justify-center items-center p-6 bg-zinc-50 border border-zinc-200 rounded-xl relative touch-none select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'
                   }`}
               >
-                {/* SỬA ĐỒI: Áp dụng trực tiếp kích thước logic gốc của SVG vào width và height của div wrapper */}
                 <div
                   className="origin-center"
                   style={{

@@ -14,7 +14,7 @@ interface TraceNodeInspectorProps {
     onViewDiff?: (filePath: string) => void;
     pendingPermission: any;
     respondToPermission: (id: string, ans: string) => void;
-    isGenerating?: boolean; // Thêm prop này để chuyển trạng thái xuống RenderTimeline [5]
+    isGenerating?: boolean; // Được cấp quyền để theo dõi luồng stream thời gian thực
 }
 
 export function TraceNodeInspector({
@@ -28,7 +28,6 @@ export function TraceNodeInspector({
 }: TraceNodeInspectorProps) {
     const modalScrollRef = useRef<HTMLDivElement>(null);
 
-    // 1. Hook useEffect: Luôn khai báo unconditionally ở trên cùng
     useEffect(() => {
         if (selectedNode && modalScrollRef.current) {
             const timer = setTimeout(() => {
@@ -40,7 +39,6 @@ export function TraceNodeInspector({
         }
     }, [selectedNode?.id, selectedNode?.data?.content]);
 
-    // 2. Hook useMemo thứ nhất: Thêm kiểm tra an toàn selectedNode
     const parsedSummaryList = useMemo(() => {
         if (!selectedNode || !selectedNode.data?.content) return null;
         const content = selectedNode.data.content.trim();
@@ -54,7 +52,6 @@ export function TraceNodeInspector({
         return null;
     }, [selectedNode]);
 
-    // 3. Hook useMemo thứ hai: Thêm kiểm tra an toàn selectedNode
     const inspectorHtml = useMemo(() => {
         if (!selectedNode || !selectedNode.data?.content) return "";
         try {
@@ -64,7 +61,6 @@ export function TraceNodeInspector({
         }
     }, [selectedNode]);
 
-    // CHỐT CHẶN: Chỉ đặt câu lệnh trả về sớm (conditional return) tại đây, SAU KHI tất cả Hooks đã khai báo xong
     if (!selectedNode) return null;
 
     const isDark = theme === "dark";
@@ -107,7 +103,6 @@ export function TraceNodeInspector({
                     </button>
                 </div>
 
-                {/* Container cuộn chính - Đã liên kết ref để auto-scroll */}
                 <div
                     ref={modalScrollRef}
                     className={`flex-1 overflow-auto p-6 space-y-5 text-left transition-colors duration-200 ${isDark ? "bg-[#020204]" : "bg-white"
@@ -209,7 +204,7 @@ export function TraceNodeInspector({
                                     ) : (
                                         <div className="space-y-1">
                                             <div className={`text-xs font-bold select-none font-mono ${isDark ? "text-amber-500" : "text-amber-600"}`}>🧠 THOUGHT PROCESS:</div>
-                                            <div className={`p-4 border rounded-xl transition-colors duration-200 ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-zinc-50 border-zinc-200"
+                                            <div className={`p-4 border rounded-xl transition-colors duration-200 ${isDark ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                                                 }`}>
                                                 <div
                                                     className={`text-[14px] leading-relaxed select-text ${isDark ? "markdown-body-dark" : "markdown-body"}`}

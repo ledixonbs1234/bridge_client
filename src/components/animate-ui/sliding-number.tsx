@@ -26,7 +26,7 @@ export function SlidingNumber({ value }: SlidingNumberProps) {
             {digit}
           </motion.span>
         ))}
-        /</AnimatePresence>
-    </div >
+      </AnimatePresence>
+    </div>
   );
 }

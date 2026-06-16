@@ -1,6 +1,6 @@
 // filepath: ridge_client/src/components/terminal/StructuredQuestionsForm.tsx
 import * as React from "react";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "../animate-ui/button";
 
@@ -48,7 +48,12 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
         return Array.isArray(q) ? (q as QuestionItem[]) : [];
     }, [data.questions]);
 
-    const [formState, setFormState] = useState<Record<string, any>>(() => {
+    const [formState, setFormState] = useState<Record<string, any>>({});
+    const [customValues, setCustomValues] = useState<Record<string, string>>({});
+    const [useCustom, setUseCustom] = useState<Record<string, boolean>>({});
+
+    // Tự động đồng bộ và thiết lập lại bối cảnh câu trả lời mới khi questionsArray thay đổi
+    useEffect(() => {
         const initial: Record<string, any> = {};
         questionsArray.forEach((q: QuestionItem) => {
             if (q.type === 'select') {
@@ -60,11 +65,10 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                 initial[q.id] = '';
             }
         });
-        return initial;
-    });
-
-    const [customValues, setCustomValues] = useState<Record<string, string>>({});
-    const [useCustom, setUseCustom] = useState<Record<string, boolean>>({});
+        setFormState(initial);
+        setCustomValues({});
+        setUseCustom({});
+    }, [questionsArray]);
 
     const handleToggleMultiSelect = useCallback((qId: string, val: string) => {
         setFormState(prev => {
@@ -127,7 +131,7 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                     ? 'bg-blue-600 border-blue-600 text-white'
                                                     : isDark
                                                         ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-                                                        : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
+                                                        : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
                                                     }`}
                                             >
                                                 {opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}
@@ -142,7 +146,7 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                 ? 'bg-blue-600 border-blue-600 text-white'
                                                 : isDark
                                                     ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-                                                    : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
+                                                    : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
                                                 }`}
                                         >
                                             ✏️ Tự nhập...
@@ -189,7 +193,7 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                     ? 'bg-blue-600 border-blue-600 text-white'
                                                     : isDark
                                                         ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-                                                        : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
+                                                        : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
                                                     }`}
                                             >
                                                 {isSelected ? '✓ ' : ''}{opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}

@@ -330,7 +330,7 @@ function VisualFlowInner({
 
     // Tự động căn chỉnh tối ưu toàn màn hình (fitView) khi có thay đổi cấu trúc sơ đồ
     const nodeStructureKey = useMemo(() => {
-        return `${nodes.length}-${nodes.map(n => `${n.id}:${n.position.x}:${n.position.y}`).join(",")}`;
+        return `${nodes.length}-${nodes.map(n => n.id).join(",")}`;
     }, [nodes]);
 
     useEffect(() => {
@@ -456,6 +456,7 @@ function VisualFlowInner({
                                 <span className="animate-pulse">❓</span> clarify requirements form
                             </div>
                             <StructuredQuestionsForm
+                                key={pendingPermission.id}
                                 data={structuredQuestions}
                                 onSubmit={(answers) => respondToPermission(pendingPermission.id, JSON.stringify(answers))}
                                 onCancel={() => respondToPermission(pendingPermission.id, "n")}
@@ -506,6 +507,7 @@ function VisualFlowInner({
                 onViewDiff={onViewDiff}
                 pendingPermission={pendingPermission}
                 respondToPermission={(id, ans) => respondToPermission(id, ans)}
+                isGenerating={isGenerating}
             />
         </div>
     );

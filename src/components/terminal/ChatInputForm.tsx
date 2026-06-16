@@ -29,6 +29,7 @@ const ALL_MODEL_OPTIONS: ModelOption[] = [
     { provider: "deepseek-web", model: "deepseek-reasoner", displayName: "DeepSeek Reasoner" },
     { provider: "deepseek-web", model: "deepseek-chat", displayName: "DeepSeek Chat" },
     { provider: "gemini-studio", model: "gemini-studio", displayName: "Gemini Studio" },
+    { provider: "gemini-studio", model: "MiniMax-M3", displayName: "Gemini Studio: MiniMax-M3" },
     { provider: "openai", model: "gemini", displayName: "OpenAI: Gemini" },
     { provider: "openai", model: "gpt-4o", displayName: "OpenAI: GPT-4o" },
     { provider: "openai", model: "gpt-4o-mini", displayName: "OpenAI: GPT-4o-Mini" }
@@ -50,7 +51,7 @@ interface ChatInputFormProps {
         mode: 'default' | 'thinking' | 'fast',
         model?: string,
         useGitIsolation?: boolean,
-        useGitFooter?: boolean // Thêm tùy chọn bật/tắt footer
+        useGitFooter?: boolean
     ) => void;
 }
 
@@ -138,7 +139,14 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         localStorage.setItem('bridge_use_git_footer', JSON.stringify(useGitFooter));
     }, [useGitFooter]);
 
-    // Tự động kiểm tra và reset trạng thái tạm dừng khi tiến trình AI dừng hoạt động
+    // Click outside to close Model Dropdown safely
+    useEffect(() => {
+        if (!showModelDropdown) return;
+        const handleGlobalClick = () => setShowModelDropdown(false);
+        document.addEventListener('click', handleGlobalClick);
+        return () => document.removeEventListener('click', handleGlobalClick);
+    }, [showModelDropdown]);
+
     useEffect(() => {
         if (!isGenerating) {
             setIsPaused(false);
@@ -229,7 +237,8 @@ export const ChatInputForm = React.memo(function ChatInputForm({
             }
             if (e.key === 'Enter') {
                 e.preventDefault();
-                handleSubmit(e);
+                // Chọn lệnh autocomplete thay vì submit nhầm tin dở dang
+                handleCommandSelect(filteredSuggests[suggestIndex].cmd);
                 return;
             }
             if (e.key === 'Escape') {
@@ -349,7 +358,10 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                         <div className="relative inline-block text-left">
                             <button
                                 type="button"
-                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowModelDropdown(!showModelDropdown);
+                                }}
                                 className="flex items-center h-8 gap-1.5 bg-white border border-zinc-200 hover:border-zinc-300 rounded-lg px-2.5 shadow-xs transition-[border-color,background-color] duration-200 cursor-pointer select-none"
                             >
                                 <span className="text-xs">
@@ -454,7 +466,6 @@ export const ChatInputForm = React.memo(function ChatInputForm({
                             {chatMode === 'thinking' ? "🧠 Mode: Thinking" : chatMode === 'fast' ? "⚡ Mode: Fast" : "🤖 Mode: Auto"}
                         </button>
 
-                        {/* ⏸️ NÚT ĐIỀU KHIỂN PAUSE/RESUME KHI ĐANG GENERATING */}
                         {isGenerating && (
                             <button
                                 type="button"
