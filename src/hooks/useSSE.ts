@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/hooks/useSSE.ts
+// filepath: ridge_client/src/hooks/useSSE.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 export interface ExecutionStep {
@@ -43,6 +43,35 @@ export interface PermissionRequest {
   details?: string;
 }
 
+// Hàm bổ trợ làm sạch chuỗi ảnh Base64 khổng lồ để tránh gây tràn bộ nhớ và crash ReactFlow [5]
+function cleanOutputData(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(cleanOutputData);
+  const cleaned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'string' && v.startsWith('data:image/') && v.includes('base64,')) {
+      cleaned[k] = `[Dữ liệu hình ảnh Base64 - Đã ẩn để tối ưu hiệu năng (độ dài: ${v.length} ký tự)]`;
+    } else if (typeof v === 'string' && v.length > 50000 && /^[A-Za-z0-9+/=]+$/.test(v.substring(0, 100))) {
+      cleaned[k] = `[Dữ liệu Base64 dài - Đã ẩn để tối ưu hiệu năng (độ dài: ${v.length} ký tự)]`;
+    } else {
+      cleaned[k] = typeof v === 'object' ? cleanOutputData(v) : v;
+    }
+  }
+  return cleaned;
+}
+
+function cleanStep(step: ExecutionStep): ExecutionStep {
+  if (!step.output) return step;
+  let cleaned = step.output;
+  try {
+    const trimmed = step.output.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      cleaned = JSON.stringify(cleanOutputData(JSON.parse(trimmed)), null, 2);
+    }
+  } catch { }
+  return { ...step, output: cleaned };
+}
+
 export function useSSE(onGenerationComplete?: () => void) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -56,15 +85,28 @@ export function useSSE(onGenerationComplete?: () => void) {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.active && data.messages) {
-          const loadedMessages: ChatMessage[] = data.messages.map((m: any) => ({
-            role: m.role,
-            content: m.content,
-            image: m.image || undefined,
-            images: m.images || undefined,
-            steps: m.steps || [],
-            timeline: m.timeline || undefined,
-            usage: m.usage || undefined
-          }));
+          const loadedMessages: ChatMessage[] = data.messages.map((m: any) => {
+            const steps = Array.isArray(m.steps) ? m.steps.map(cleanStep) : [];
+            const timeline = Array.isArray(m.timeline) ? m.timeline.map((t: any) => {
+              if (t.type === 'steps' && Array.isArray(t.steps)) {
+                return {
+                  ...t,
+                  steps: t.steps.map(cleanStep)
+                };
+              }
+              return t;
+            }) : undefined;
+
+            return {
+              role: m.role,
+              content: m.content,
+              image: m.image || undefined,
+              images: m.images || undefined,
+              steps,
+              timeline,
+              usage: m.usage || undefined
+            };
+          });
           setMessages(loadedMessages);
 
           setLogs((prev: LogEntry[]) => [
@@ -232,11 +274,11 @@ export function useSSE(onGenerationComplete?: () => void) {
 
                   if (lastItem && lastItem.type === 'steps' && lastItem.steps) {
                     const updatedSteps = [...lastItem.steps];
-                    const lastStep = updatedSteps[updatedSteps.length - 1];
-                    if (lastStep && lastStep.type === 'thinking') {
+                    const lastTStep = updatedSteps[updatedSteps.length - 1];
+                    if (lastTStep && lastTStep.type === 'thinking') {
                       updatedSteps[updatedSteps.length - 1] = {
-                        ...lastStep,
-                        input: (lastStep.input || '') + '\n' + content
+                        ...lastTStep,
+                        input: (lastTStep.input || '') + '\n' + content
                       };
                     } else {
                       updatedSteps.push({
@@ -378,9 +420,12 @@ export function useSSE(onGenerationComplete?: () => void) {
                 }
               });
             } else if (parsed.type === 'tool_output') {
-              const parsedOutput = typeof parsed.output === 'object' ? JSON.stringify(parsed.output, null, 2) : parsed.output;
+              // Tiến hành lọc bỏ sâu dữ liệu ảnh Base64 khổng lồ trước khi lưu vào trạng thái [5]
+              const cleanedRawOutput = cleanOutputData(parsed.output);
+              const parsedOutput = typeof cleanedRawOutput === 'object'
+                ? JSON.stringify(cleanedRawOutput, null, 2)
+                : cleanedRawOutput;
 
-              // Định nghĩa kiểu rõ ràng cho tham số 's' để tránh lỗi implicit any
               const targetStep = currentSteps.find((s: ExecutionStep) => s.id === parsed.step_id);
               if (targetStep) {
                 targetStep.output = parsedOutput;
@@ -457,15 +502,28 @@ export function useSSE(onGenerationComplete?: () => void) {
               });
             } else if (parsed.type === 'done') {
               if (parsed.history) {
-                const loadedMessages: ChatMessage[] = parsed.history.map((m: any) => ({
-                  role: m.role,
-                  content: m.content,
-                  image: m.image || undefined,
-                  images: m.images || undefined,
-                  steps: m.steps || [],
-                  timeline: m.timeline || undefined,
-                  usage: m.usage || undefined
-                }));
+                const loadedMessages: ChatMessage[] = parsed.history.map((m: any) => {
+                  const steps = Array.isArray(m.steps) ? m.steps.map(cleanStep) : [];
+                  const timeline = Array.isArray(m.timeline) ? m.timeline.map((t: any) => {
+                    if (t.type === 'steps' && Array.isArray(t.steps)) {
+                      return {
+                        ...t,
+                        steps: t.steps.map(cleanStep)
+                      };
+                    }
+                    return t;
+                  }) : undefined;
+
+                  return {
+                    role: m.role,
+                    content: m.content,
+                    image: m.image || undefined,
+                    images: m.images || undefined,
+                    steps,
+                    timeline,
+                    usage: m.usage || undefined
+                  };
+                });
                 setMessages(loadedMessages);
               }
               if (onGenerationComplete) onGenerationComplete();
@@ -507,5 +565,5 @@ export function useSSE(onGenerationComplete?: () => void) {
     setPendingPermission(null);
   }, []);
 
-  return { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setMessages, setLogs };
+  return { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setMessages, setLogs, setPendingPermission };
 }

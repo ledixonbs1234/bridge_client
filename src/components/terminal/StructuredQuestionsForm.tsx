@@ -25,9 +25,17 @@ interface StructuredQuestionsFormProps {
     };
     onSubmit: (answers: Record<string, any>) => void;
     onCancel: () => void;
+    theme?: "light" | "dark";
 }
 
-export const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({ data, onSubmit, onCancel }: StructuredQuestionsFormProps) {
+export const StructuredQuestionsForm = React.memo(function StructuredQuestionsForm({
+    data,
+    onSubmit,
+    onCancel,
+    theme = "light"
+}: StructuredQuestionsFormProps) {
+    const isDark = theme === "dark";
+
     const questionsArray = useMemo<QuestionItem[]>(() => {
         let q = data.questions;
         if (typeof q === 'string') {
@@ -88,17 +96,17 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 shadow-inner">
-                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider block mb-0.5">💡 GIẢI THÍCH NGỮ CẢNH CỦA AGENT</span>
-                <p className="text-[11px] text-zinc-700 leading-relaxed font-semibold">{data.explanation}</p>
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-left w-full">
+            <div className={`rounded-xl p-3 border shadow-inner ${isDark ? 'bg-blue-950/20 border-blue-900/50' : 'bg-blue-50/50 border-blue-100'}`}>
+                <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider block mb-0.5">💡 GIẢI THÍCH NGỮ CẢNH CỦA AGENT</span>
+                <p className={`text-[11px] leading-relaxed font-semibold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{data.explanation}</p>
             </div>
 
-            <div className="space-y-4 divide-y divide-zinc-100 max-h-[300px] overflow-y-auto pr-1">
+            <div className={`space-y-4 divide-y max-h-[300px] overflow-y-auto pr-1 ${isDark ? 'divide-zinc-800' : 'divide-zinc-100'}`}>
                 {questionsArray.map((q: QuestionItem, idx: number) => (
                     <div key={q.id} className={`pt-3.5 ${idx === 0 ? 'pt-0 border-none' : ''}`}>
-                        <label className="text-[11px] font-bold text-zinc-800 block mb-2">
-                            <span className="text-blue-600 font-extrabold mr-1.5">{idx + 1}.</span>
+                        <label className={`text-[11px] font-bold block mb-2 ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                            <span className="text-blue-500 font-extrabold mr-1.5">{idx + 1}.</span>
                             {q.question}
                         </label>
 
@@ -117,7 +125,9 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                 }}
                                                 className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${isSelected
                                                     ? 'bg-blue-600 border-blue-600 text-white'
-                                                    : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                                    : isDark
+                                                        ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                                                        : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
                                                     }`}
                                             >
                                                 {opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}
@@ -130,7 +140,9 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                             onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: true }))}
                                             className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
                                                 ? 'bg-blue-600 border-blue-600 text-white'
-                                                : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                                                : isDark
+                                                    ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                                                    : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
                                                 }`}
                                         >
                                             ✏️ Tự nhập...
@@ -152,7 +164,10 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                 value={customValues[q.id] || ''}
                                                 onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
                                                 placeholder="Nhập phương án tự định nghĩa của bạn..."
-                                                className="w-full mt-1.5 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-[11px] text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs"
+                                                className={`w-full mt-1.5 px-2.5 py-1.5 border rounded-lg text-[11px] focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs ${isDark
+                                                    ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+                                                    : 'bg-white border-zinc-200 text-zinc-800'
+                                                    }`}
                                             />
                                         </motion.div>
                                     )}
@@ -172,7 +187,9 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                 onClick={() => handleToggleMultiSelect(q.id, opt.value)}
                                                 className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${isSelected
                                                     ? 'bg-blue-600 border-blue-600 text-white'
-                                                    : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
+                                                    : isDark
+                                                        ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                                                        : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
                                                     }`}
                                             >
                                                 {isSelected ? '✓ ' : ''}{opt.label} {opt.is_default && <span className={isSelected ? 'text-blue-200' : 'text-blue-500'}>★</span>}
@@ -185,7 +202,9 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                             onClick={() => setUseCustom(prev => ({ ...prev, [q.id]: !prev[q.id] }))}
                                             className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shadow-xs ${useCustom[q.id]
                                                 ? 'bg-blue-600 border-blue-600 text-white'
-                                                : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
+                                                : isDark
+                                                    ? 'bg-zinc-850 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                                                    : 'bg-white border-zinc-200 text-zinc-655 hover:bg-zinc-50'
                                                 }`}
                                         >
                                             ✏️ Ý kiến bổ sung...
@@ -207,7 +226,10 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                                 value={customValues[q.id] || ''}
                                                 onChange={(e) => setCustomValues(prev => ({ ...prev, [q.id]: e.target.value }))}
                                                 placeholder="Nhập phương án bổ sung..."
-                                                className="w-full mt-1.5 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-[11px] text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs"
+                                                className={`w-full mt-1.5 px-2.5 py-1.5 border rounded-lg text-[11px] focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs ${isDark
+                                                    ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+                                                    : 'bg-white border-zinc-200 text-zinc-800'
+                                                    }`}
                                             />
                                         </motion.div>
                                     )}
@@ -222,19 +244,25 @@ export const StructuredQuestionsForm = React.memo(function StructuredQuestionsFo
                                 onChange={(e) => setFormState(prev => ({ ...prev, [q.id]: e.target.value }))}
                                 placeholder="Nhập câu trả lời chi tiết của bạn..."
                                 rows={2}
-                                className="w-full px-2.5 py-2 bg-white border border-zinc-200 rounded-lg text-[11px] text-zinc-800 focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs resize-none"
+                                className={`w-full px-2.5 py-2 border rounded-lg text-[11px] focus-visible:border-blue-500 focus-visible:ring-1 focus-visible:ring-blue-500/20 outline-none shadow-xs resize-none ${isDark
+                                    ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+                                    : 'bg-white border-zinc-200 text-zinc-800'
+                                    }`}
                             />
                         )}
                     </div>
                 ))}
             </div>
 
-            <div className="flex gap-1.5 justify-end border-t border-zinc-150 pt-3 mt-1">
+            <div className={`flex gap-1.5 justify-end border-t pt-3 mt-1 ${isDark ? 'border-zinc-800' : 'border-zinc-150'}`}>
                 <Button
                     variant="outline"
                     size="sm"
                     type="button"
-                    className="text-zinc-655 border-zinc-200 hover:bg-zinc-50 text-[10px] h-7 px-2.5 cursor-pointer"
+                    className={`text-[10px] h-7 px-2.5 cursor-pointer ${isDark
+                        ? 'text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-white'
+                        : 'text-zinc-655 border-zinc-200 hover:bg-zinc-50'
+                        }`}
                     onClick={onCancel}
                 >
                     Từ chối (Hủy bỏ)

@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/components/terminal/TraceNodeInspector.tsx
+// filepath: ridge_client/src/components/terminal/TraceNodeInspector.tsx
 import * as React from "react";
 import { useMemo, useEffect, useRef } from "react";
 import { Node } from "reactflow";
@@ -14,6 +14,7 @@ interface TraceNodeInspectorProps {
     onViewDiff?: (filePath: string) => void;
     pendingPermission: any;
     respondToPermission: (id: string, ans: string) => void;
+    isGenerating?: boolean; // Thêm prop này để chuyển trạng thái xuống RenderTimeline [5]
 }
 
 export function TraceNodeInspector({
@@ -22,7 +23,8 @@ export function TraceNodeInspector({
     theme,
     onViewDiff,
     pendingPermission,
-    respondToPermission
+    respondToPermission,
+    isGenerating = false
 }: TraceNodeInspectorProps) {
     const modalScrollRef = useRef<HTMLDivElement>(null);
 
@@ -142,7 +144,7 @@ export function TraceNodeInspector({
 
                     {selectedNode.type === "cyberAgent" && (
                         <div className="space-y-4">
-                            <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
+                            <div className={`grid grid-cols-2 gap-4 text-xs font-mono transition-colors ${isDark ? "text-zinc-400" : "text-zinc-655"}`}>
                                 <div>• Name: <span className="font-bold" style={{ color: isDark ? "#fff" : "#18181b" }}>{selectedNode.data.name}</span></div>
                                 <div>• Model: <span className="font-bold" style={{ color: isDark ? "#60a5fa" : "#2563eb" }}>{selectedNode.data.model}</span></div>
                             </div>
@@ -197,7 +199,7 @@ export function TraceNodeInspector({
                                                         {timelineEvents.length > 0 && (
                                                             <div className="space-y-2">
                                                                 <div className={`text-[10px] font-bold font-mono tracking-wider ${isDark ? "text-amber-500" : "text-amber-600"}`}>🧠 INTERACTIVE TIMELINE:</div>
-                                                                <RenderTimeline events={timelineEvents} theme={theme} />
+                                                                <RenderTimeline events={timelineEvents} theme={theme} isGenerating={isGenerating} />
                                                             </div>
                                                         )}
                                                     </div>

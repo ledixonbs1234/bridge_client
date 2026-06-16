@@ -8,14 +8,14 @@ import { MemoryGrid } from "./components/MemoryGrid";
 import { TelegramConfig } from "./components/TelegramConfig";
 import { SandboxManager } from "./components/SandboxManager";
 import { GraphBuilder } from "./components/GraphBuilder";
-
+import { SkillTester } from "./components/SkillTester";
 import { SidebarHarnessList } from "./components/SidebarHarnessList";
 import { SidebarShadowChanges } from "./components/SidebarShadowChanges";
 import { DiffLightbox } from "./components/DiffLightbox";
 import { HarnessRunModal } from "./components/HarnessRunModal";
 import { highlightCodeLine } from "./lib/utils";
 
-type TabPanel = "flow" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox" | "builder";
+type TabPanel = "flow" | "telemetry" | "traces" | "memory" | "telegram" | "sandbox" | "builder" | "tester"; // <-- Thêm "tester"
 
 export interface WorkspaceData {
   success: boolean;
@@ -486,7 +486,8 @@ export default function App() {
                 { tab: "telemetry" as TabPanel, label: "Skills Telemetry", icon: "📊" },
                 { tab: "memory" as TabPanel, label: "FluxMem Assets", icon: "🧠" },
                 { tab: "sandbox" as TabPanel, label: "Shadow Files", icon: "🛡️" },
-                { tab: "telegram" as TabPanel, label: "Connect Mobile", icon: "✈️" }
+                { tab: "telegram" as TabPanel, label: "Connect Mobile", icon: "✈️" },
+                { tab: "tester" as TabPanel, label: "Skill Tester", icon: "🧪" } // <-- Nút bấm chuyển hướng sang tab mô phỏng
               ].map((item) => (
                 <button
                   key={item.tab}
@@ -629,13 +630,15 @@ export default function App() {
                   <div>
                     <h2 className={`text-lg font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-white" : "text-zinc-800"}`}>
                       <span>⚡</span>{" "}
-                      {activeTab === "telemetry"
-                        ? "Telemetry Report"
-                        : activeTab === "memory"
-                          ? "FluxMem Layer"
-                          : activeTab === "sandbox"
-                            ? "Shadow Transaction Manager"
-                            : "Telegram Config"}
+                            {activeTab === "telemetry"
+                              ? "Telemetry Report"
+                              : activeTab === "memory"
+                                ? "FluxMem Layer"
+                                : activeTab === "sandbox"
+                                  ? "Shadow Transaction Manager"
+                                  : activeTab === "telegram"
+                                    ? "Telegram Config"
+                                    : "Skill Tester"} 
                     </h2>
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>
@@ -651,6 +654,7 @@ export default function App() {
                 {activeTab === "memory" && <MemoryGrid reloadTrigger={reloadTrigger} theme={theme} />}
                 {activeTab === "sandbox" && <SandboxManager reloadTrigger={reloadTrigger} theme={theme} />}
                 {activeTab === "telegram" && <TelegramConfig theme={theme} />}
+                {activeTab === "tester" && <SkillTester sse={sse} theme={theme} />} {/* <-- Render Panel giả lập */}
               </div>
             </div>
           )}

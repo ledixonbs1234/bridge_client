@@ -1,4 +1,4 @@
-// filepath: bridge_client/src/components/terminal/TimelineEvents.tsx
+// filepath: ridge_client/src/components/terminal/TimelineEvents.tsx
 import * as React from "react";
 import { useState, useMemo } from "react";
 import { TimelineTextBlock } from "./TimelineTextBlock";
@@ -12,6 +12,27 @@ export interface GroupedTimelineEvent {
     args?: any;
     output?: any;
     hasOutput: boolean;
+}
+
+// Hàm hỗ trợ thu gọn dữ liệu string quá dài để tránh tràn giao diện [5]
+function simplifyArgs(obj: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(simplifyArgs);
+    const simplified: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === 'string') {
+            if (v.length > 120) {
+                simplified[k] = v.substring(0, 120) + "... [Dữ liệu lớn đã được thu gọn]";
+            } else {
+                simplified[k] = v;
+            }
+        } else if (typeof v === 'object') {
+            simplified[k] = simplifyArgs(v);
+        } else {
+            simplified[k] = v;
+        }
+    }
+    return simplified;
 }
 
 export function mapLiveTimelineToAccumulator(timeline: any[]) {
@@ -72,12 +93,26 @@ export function CollapsibleToolCall({ event, theme }: { event: any; theme: strin
     const [isOpen, setIsOpen] = useState(false);
     const isDark = theme === 'dark';
 
+    // Tạo danh sách cặp tham số hiển thị ở tiêu đề ngoài, tự động thu gọn các chuỗi quá dài
     const argsPairs = useMemo(() => {
         if (!event.args || typeof event.args !== 'object') return [];
         return Object.entries(event.args).map(([k, v]) => {
-            const displayVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            let displayVal = "";
+            if (typeof v === 'object') {
+                displayVal = JSON.stringify(simplifyArgs(v));
+            } else {
+                displayVal = String(v);
+            }
+            if (displayVal.length > 80) {
+                displayVal = displayVal.substring(0, 80) + "... [Đã thu gọn]";
+            }
             return { key: k, value: displayVal };
         });
+    }, [event.args]);
+
+    // Thu gọn tham số đầy đủ hiển thị trong bảng chi tiết
+    const simplifiedFullArgs = useMemo(() => {
+        return simplifyArgs(event.args || {});
     }, [event.args]);
 
     const displayOutput = useMemo(() => {
@@ -135,14 +170,14 @@ export function CollapsibleToolCall({ event, theme }: { event: any; theme: strin
                         <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider select-none">Tham số đầy đủ:</div>
                         <pre className={`p-2.5 rounded border max-h-40 overflow-y-auto ${isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
                             }`}>
-                            {JSON.stringify(event.args || {}, null, 2)}
+                            {JSON.stringify(simplifiedFullArgs, null, 2)}
                         </pre>
                     </div>
 
                     {event.hasOutput && (
                         <div className="space-y-1">
                             <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider select-none">Kết quả trả về:</div>
-                            <pre className={`p-2.5 rounded border max-h-60 overflow-y-auto ${isDark ? 'bg-zinc-900 border-zinc-800 text-emerald-400' : 'bg-zinc-50 border-zinc-200 text-emerald-800'
+                            <pre className={`p-2.5 rounded border max-h-60 overflow-y-auto ${isDark ? 'bg-zinc-900 border-zinc-800 text-emerald-400' : 'bg-zinc-50 border-zinc-200 text-emerald-850'
                                 }`}>
                                 {displayOutput}
                             </pre>
@@ -154,14 +189,27 @@ export function CollapsibleToolCall({ event, theme }: { event: any; theme: strin
     );
 }
 
-export function RenderTimeline({ events, theme }: { events: GroupedTimelineEvent[]; theme: string }) {
+export function RenderTimeline({ events, theme, isGenerating = false }: { events: GroupedTimelineEvent[]; theme: string; isGenerating?: boolean }) {
     const isDark = theme === 'dark';
+
+    // Lọc bỏ động các log (thinking) đã hoàn thành:
+    // Chỉ hiển thị log nếu nó ở vị trí cuối cùng trong mảng sự kiện và hệ thống đang actively tạo phản hồi [5]
+    const visibleEvents = useMemo(() => {
+        return events.filter((evt, index) => {
+            if (evt.type === 'log') {
+                const isLast = index === events.length - 1;
+                return isGenerating && isLast;
+            }
+            return true;
+        });
+    }, [events, isGenerating]);
+
     return (
         <div className="relative pl-6 space-y-6 text-left">
             <div className={`absolute top-2 bottom-2 left-2.5 w-0.5 border-l-2 border-dashed ${isDark ? 'border-zinc-800' : 'border-zinc-200'
                 }`} />
 
-            {events.map((evt) => {
+            {visibleEvents.map((evt) => {
                 let icon = '🟢';
                 let bgClass = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-100 border-zinc-200';
                 if (evt.type === 'log') icon = '🧠';
@@ -178,7 +226,8 @@ export function RenderTimeline({ events, theme }: { events: GroupedTimelineEvent
                         <div className="space-y-1">
                             {evt.type === 'log' && (
                                 <div className={`text-xs italic font-mono pl-1 leading-relaxed ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                                    {evt.content}
+                                    <span className="font-bold text-amber-500 animate-pulse">🧠 [AI] Đang suy nghĩ...</span>
+                                    {evt.content && <div className="mt-1 opacity-80 whitespace-pre-wrap">{evt.content}</div>}
                                 </div>
                             )}
 

@@ -19,7 +19,7 @@ import { WorkspaceData } from "../../App";
 import { AiOutputPanel } from "./AiOutputPanel";
 import { TraceNodeInspector } from "./TraceNodeInspector";
 import { mapLiveTimelineToAccumulator } from "./TimelineEvents";
-
+import { StructuredQuestionsForm } from "./StructuredQuestionsForm";
 // Nhập khẩu các custom nodes chất lượng cao
 import {
     CyberGroupNode,
@@ -124,7 +124,16 @@ function VisualFlowInner({
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-
+    const structuredQuestions = useMemo(() => {
+        if (!pendingPermission?.details) return null;
+        try {
+            const parsed = JSON.parse(pendingPermission.details);
+            if (parsed && parsed.type === 'structured_questions') {
+                return parsed;
+            }
+        } catch { }
+        return null;
+    }, [pendingPermission]);
     useEffect(() => {
         localStorage.setItem("bridge_response_panel_width", String(panelWidth));
         localStorage.setItem("bridge_response_panel_height", String(panelHeight));
@@ -438,28 +447,54 @@ function VisualFlowInner({
             {/* Structured HITL Approval Overlay */}
             {pendingPermission && (
                 <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs select-text">
-                    <div className="bg-zinc-900 border border-amber-500 rounded-2xl p-6 space-y-4 shadow-2xl text-left max-w-md w-full relative" style={{ animation: "zoomIn 0.18s ease-out" }}>
-                        <div className="flex items-center gap-1.5 text-amber-500 font-bold text-[11px] font-mono select-none">
-                            <span className="animate-pulse">⚠️</span> hitl approval required
+                    {structuredQuestions ? (
+                        <div className={`border rounded-2xl p-6 space-y-4 shadow-2xl text-left max-w-lg w-full relative ${isDark
+                            ? 'bg-zinc-950 border-blue-500/80 text-zinc-100'
+                            : 'bg-white border-blue-500 text-zinc-800'
+                            }`} style={{ animation: "zoomIn 0.18s ease-out" }}>
+                            <div className={`flex items-center gap-1.5 font-bold text-[11px] font-mono select-none ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                                <span className="animate-pulse">❓</span> clarify requirements form
+                            </div>
+                            <StructuredQuestionsForm
+                                data={structuredQuestions}
+                                onSubmit={(answers) => respondToPermission(pendingPermission.id, JSON.stringify(answers))}
+                                onCancel={() => respondToPermission(pendingPermission.id, "n")}
+                                theme={theme}
+                            />
                         </div>
-                        <p className="text-xs text-zinc-200 leading-relaxed font-semibold">
-                            {pendingPermission.query}
-                        </p>
-                        <div className="flex gap-1.5 justify-end pt-1">
-                            <button
-                                onClick={() => respondToPermission(pendingPermission.id, "n")}
-                                className="px-3.5 py-1.5 border border-red-500 bg-red-950/20 text-red-500 rounded-lg text-[10px] font-mono font-bold hover:bg-red-500/20 transition-all cursor-pointer"
-                            >
-                                DENY
-                            </button>
-                            <button
-                                onClick={() => respondToPermission(pendingPermission.id, "y")}
-                                className="px-3.5 py-1.5 border border-blue-500 bg-blue-950/20 text-blue-400 rounded-lg text-[10px] font-mono font-bold hover:bg-blue-50/20 transition-all cursor-pointer"
-                            >
-                                APPROVE
-                            </button>
+                    ) : (
+                        <div className={`border rounded-2xl p-6 space-y-4 shadow-2xl text-left max-w-md w-full relative ${isDark
+                            ? 'bg-zinc-950 border-amber-500/80 text-zinc-100'
+                            : 'bg-white border-amber-500 text-zinc-800'
+                            }`} style={{ animation: "zoomIn 0.18s ease-out" }}>
+                            <div className={`flex items-center gap-1.5 font-bold text-[11px] font-mono select-none ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>
+                                <span className="animate-pulse">⚠️</span> hitl approval required
+                            </div>
+                            <p className={`text-xs leading-relaxed font-semibold ${isDark ? 'text-zinc-300' : 'text-zinc-650'}`}>
+                                {pendingPermission.query}
+                            </p>
+                            <div className="flex gap-1.5 justify-end pt-1">
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, "n")}
+                                    className={`px-3.5 py-1.5 border rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${isDark
+                                        ? 'border-red-900/60 bg-red-950/20 text-red-400 hover:bg-red-950/40'
+                                        : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                                        }`}
+                                >
+                                    DENY
+                                </button>
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, "y")}
+                                    className={`px-3.5 py-1.5 border rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${isDark
+                                        ? 'border-blue-900/60 bg-blue-950/20 text-blue-400 hover:bg-blue-950/40'
+                                        : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                        }`}
+                                >
+                                    APPROVE
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
