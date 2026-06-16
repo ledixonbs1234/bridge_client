@@ -140,12 +140,6 @@ const BuilderValidatorNode = React.memo(({ data, selected }: any) => {
         </div>
     );
 });
-
-const nodeTypes = {
-    agent: BuilderAgentNode,
-    validator: BuilderValidatorNode
-};
-
 // =================================================================
 // ⚙️ FSM GRAPH TEMPLATES CONFIG
 // =================================================================
@@ -200,6 +194,10 @@ const FSM_TEMPLATES = {
 };
 
 export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: GraphBuilderProps) {
+    const nodeTypes = useMemo(() => ({
+        agent: BuilderAgentNode,
+        validator: BuilderValidatorNode
+    }), []);
     const [harnessName, setHarnessName] = useState("custom_agent_workflow");
     const [description, setDescription] = useState("Mô tả quy trình tự động hóa...");
     const [entryPoint, setEntryPoint] = useState("planner");

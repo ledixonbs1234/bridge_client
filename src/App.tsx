@@ -178,7 +178,10 @@ export default function App() {
 
   const fetchShadowChanges = useCallback(() => {
     fetch("/api/dashboard/shadow-changes")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Mất kết nối HTTP đến Shadow Changes");
+        return res.json();
+      })
       .then((data) => {
         if (data.success) {
           setShadowChanges((prevHistory) => {
@@ -630,15 +633,15 @@ export default function App() {
                   <div>
                     <h2 className={`text-lg font-bold uppercase tracking-wider flex items-center gap-2 ${isDark ? "text-white" : "text-zinc-800"}`}>
                       <span>⚡</span>{" "}
-                            {activeTab === "telemetry"
-                              ? "Telemetry Report"
-                              : activeTab === "memory"
-                                ? "FluxMem Layer"
-                                : activeTab === "sandbox"
-                                  ? "Shadow Transaction Manager"
-                                  : activeTab === "telegram"
-                                    ? "Telegram Config"
-                                    : "Skill Tester"} 
+                      {activeTab === "telemetry"
+                        ? "Telemetry Report"
+                        : activeTab === "memory"
+                          ? "FluxMem Layer"
+                          : activeTab === "sandbox"
+                            ? "Shadow Transaction Manager"
+                            : activeTab === "telegram"
+                              ? "Telegram Config"
+                              : "Skill Tester"}
                     </h2>
                     <p className="text-xs text-zinc-500 mt-1">Workspace điều khiển & Phân tích tối ưu hệ thống Agent</p>
                   </div>

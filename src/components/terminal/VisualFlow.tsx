@@ -29,13 +29,7 @@ import {
     CyberValidatorNode
 } from "../nodes";
 
-const nodeTypes = {
-    cyberUser: CyberUserNode,
-    cyberAgent: CyberAgentNode,
-    cyberTool: CyberToolNode,
-    cyberValidator: CyberValidatorNode,
-    cyberGroup: CyberGroupNode
-};
+
 
 interface VisualFlowProps {
     activeAgent: "MaxHermes" | "MaxClaw";
@@ -68,6 +62,14 @@ function VisualFlowInner({
     setTheme,
     fetchWorkspace
 }: VisualFlowProps) {
+
+    const nodeTypes = useMemo(() => ({
+        cyberUser: CyberUserNode,
+        cyberAgent: CyberAgentNode,
+        cyberTool: CyberToolNode,
+        cyberValidator: CyberValidatorNode,
+        cyberGroup: CyberGroupNode
+    }), []);
     const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration } = sse;
 
     const [realProviders, setRealProviders] = useState<any[]>([]);
@@ -492,6 +494,15 @@ function VisualFlowInner({
                                         }`}
                                 >
                                     APPROVE
+                                </button>
+                                <button
+                                    onClick={() => respondToPermission(pendingPermission.id, "a")}
+                                    className={`px-3.5 py-1.5 border rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${isDark
+                                        ? 'border-purple-900/60 bg-purple-950/20 text-purple-400 hover:bg-purple-950/40'
+                                        : 'border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100'
+                                        }`}
+                                >
+                                    APPROVE ALL
                                 </button>
                             </div>
                         </div>
