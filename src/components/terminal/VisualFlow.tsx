@@ -308,6 +308,7 @@ function VisualFlowInner({
             });
         }
 
+        // 1. Vẽ các cạnh tuần tự tĩnh của luồng lập trình mềm (Programmatic next)
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
             const addEdgeHelper = (targetNodeName: string) => {
                 edgesList.push({
@@ -324,6 +325,59 @@ function VisualFlowInner({
             };
             if (nodeVal.next) addEdgeHelper(nodeVal.next);
         });
+
+        // 2. Vẽ các cạnh tuần tự tĩnh (edges) được lưu từ Graph Builder
+        if (Array.isArray(workspaceData?.harness_config?.edges)) {
+            workspaceData.harness_config.edges.forEach((edge: any) => {
+                edgesList.push({
+                    id: `edge-flow-${edge.from}-${edge.to}`,
+                    source: edge.from,
+                    target: edge.to,
+                    type: "smoothstep",
+                    style: {
+                        stroke: theme === "dark" ? "#27272a" : "#d4d4d8",
+                        strokeWidth: 1.5
+                    },
+                    markerEnd: { type: MarkerType.ArrowClosed }
+                });
+            });
+        }
+
+        // 3. Vẽ các cạnh rẽ nhánh điều kiện (conditional_edges) thành Success (Green) và Failure (Red) rực rỡ
+        if (Array.isArray(workspaceData?.harness_config?.conditional_edges)) {
+            workspaceData.harness_config.conditional_edges.forEach((ce: any) => {
+                if (ce.router) {
+                    if (ce.router.is_empty) {
+                        edgesList.push({
+                            id: `edge-flow-cond-success-${ce.from}-${ce.router.is_empty}`,
+                            source: ce.from,
+                            target: ce.router.is_empty,
+                            type: "smoothstep",
+                            label: "✓ Success",
+                            animated: true,
+                            style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '4,4' },
+                            labelStyle: { fill: '#10b981', fontWeight: 700, fontSize: 9 },
+                            labelBgStyle: { fill: theme === "dark" ? '#05050c' : '#f0fdf4', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1, rx: 4 },
+                            markerEnd: { type: MarkerType.ArrowClosed }
+                        });
+                    }
+                    if (ce.router.is_not_empty) {
+                        edgesList.push({
+                            id: `edge-flow-cond-failure-${ce.from}-${ce.router.is_not_empty}`,
+                            source: ce.from,
+                            target: ce.router.is_not_empty,
+                            type: "smoothstep",
+                            label: "✗ Failure",
+                            animated: true,
+                            style: { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '4,4' },
+                            labelStyle: { fill: '#ef4444', fontWeight: 700, fontSize: 9 },
+                            labelBgStyle: { fill: theme === "dark" ? '#05050c' : '#fef2f2', fillOpacity: 0.9, stroke: '#ef4444', strokeWidth: 1, rx: 4 },
+                            markerEnd: { type: MarkerType.ArrowClosed }
+                        });
+                    }
+                }
+            });
+        }
 
         setNodes(nodesList);
         setEdges(edgesList);
