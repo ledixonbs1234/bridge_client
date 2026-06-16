@@ -43,7 +43,7 @@ export interface PermissionRequest {
   details?: string;
 }
 
-// Hàm bổ trợ làm sạch chuỗi ảnh Base64 khổng lồ để tránh gây tràn bộ nhớ và crash ReactFlow [5]
+// Hàm bổ trợ làm sạch chuỗi ảnh Base64 khổng lồ để tránh gây tràn bộ nhớ và crash ReactFlow
 function cleanOutputData(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(cleanOutputData);
@@ -252,6 +252,24 @@ export function useSSE(onGenerationComplete?: () => void) {
                   ];
                 }
               });
+            } else if (parsed.type === 'system') {
+              // Xử lý thông điệp chuyển giao Node tự động của hệ thống và đưa vào Timeline
+              setMessages((prev: ChatMessage[]) => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'assistant') {
+                  const updatedTimeline = last.timeline ? [...last.timeline] : [];
+                  updatedTimeline.push({
+                    id: 'system-' + Math.random().toString(36).substring(2, 9),
+                    type: 'text',
+                    content: `> ℹ️ *${parsed.content}*`
+                  });
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, timeline: updatedTimeline }
+                  ];
+                }
+                return prev;
+              });
             } else if (parsed.type === 'log') {
               const content = parsed.content || '';
               const last = currentSteps[currentSteps.length - 1];
@@ -420,7 +438,6 @@ export function useSSE(onGenerationComplete?: () => void) {
                 }
               });
             } else if (parsed.type === 'tool_output') {
-              // Tiến hành lọc bỏ sâu dữ liệu ảnh Base64 khổng lồ trước khi lưu vào trạng thái [5]
               const cleanedRawOutput = cleanOutputData(parsed.output);
               const parsedOutput = typeof cleanedRawOutput === 'object'
                 ? JSON.stringify(cleanedRawOutput, null, 2)
