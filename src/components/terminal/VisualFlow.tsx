@@ -294,16 +294,27 @@ function VisualFlowInner({
             });
         });
 
+        // Helper lấy trạng thái chạy động của từng node phục vụ tô màu đường nối
+        const getNodeState = (nodeId: string) => {
+            const dbState = currentStepMap.find(s => s.step_key === nodeId);
+            if (!dbState) return "PENDING";
+            return dbState.state; // "PENDING" | "QUEUED" | "RUNNING" | "VALIDATING" | "DONE" | "FAILED" | "BLOCKED"
+        };
+
+        const initialNodeState = getNodeState(initialNode);
+
         if (lastUserMsg) {
             edgesList.push({
                 id: `edge-user-to-entry`,
                 source: userNodeId,
                 target: initialNode,
                 type: "smoothstep",
-                animated: runningStepKey === initialNode,
+                animated: runningStepKey === initialNode || initialNodeState === "RUNNING" || initialNodeState === "VALIDATING",
                 style: {
-                    stroke: theme === "dark" ? "#00f0ff" : "#0ea5e9",
-                    strokeWidth: 2
+                    stroke: (initialNodeState === "RUNNING" || initialNodeState === "VALIDATING")
+                        ? (theme === "dark" ? "#00f0ff" : "#0ea5e9")
+                        : (theme === "dark" ? "#3f3f46" : "#cbd5e1"),
+                    strokeWidth: (initialNodeState === "RUNNING" || initialNodeState === "VALIDATING") ? 2.5 : 1.5
                 }
             });
         }
@@ -311,14 +322,38 @@ function VisualFlowInner({
         // 1. Vẽ các cạnh tuần tự tĩnh của luồng lập trình mềm (Programmatic next)
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any]) => {
             const addEdgeHelper = (targetNodeName: string) => {
+                const sourceState = getNodeState(nodeName);
+                const targetState = getNodeState(targetNodeName);
+
+                let strokeColor = theme === "dark" ? "#27272a" : "#e4e4e7";
+                let strokeWidth = 1.5;
+                let isAnimated = false;
+                let strokeDasharray = undefined;
+
+                if (sourceState === "DONE" && targetState === "DONE") {
+                    strokeColor = theme === "dark" ? "#10b981" : "#059669"; // Màu xanh lá cây hoàn thành
+                    strokeWidth = 2;
+                } else if (sourceState === "DONE" && (targetState === "RUNNING" || targetState === "VALIDATING")) {
+                    strokeColor = theme === "dark" ? "#00f0ff" : "#0ea5e9"; // Đang chuyển giao, chạy động sáng
+                    strokeWidth = 2.5;
+                    isAnimated = true;
+                } else if ((sourceState === "RUNNING" || sourceState === "VALIDATING") && targetState === "PENDING") {
+                    strokeColor = theme === "dark" ? "#6366f1" : "#4f46e5"; // Đang chuẩn bị chuyển tiếp
+                    strokeWidth = 1.5;
+                    isAnimated = true;
+                    strokeDasharray = "5,5";
+                }
+
                 edgesList.push({
                     id: `edge-flow-${nodeName}-${targetNodeName}`,
                     source: nodeName,
                     target: targetNodeName,
                     type: "smoothstep",
+                    animated: isAnimated,
                     style: {
-                        stroke: theme === "dark" ? "#27272a" : "#d4d4d8",
-                        strokeWidth: 1.5
+                        stroke: strokeColor,
+                        strokeWidth: strokeWidth,
+                        strokeDasharray: strokeDasharray
                     },
                     markerEnd: { type: MarkerType.ArrowClosed }
                 });
@@ -329,49 +364,133 @@ function VisualFlowInner({
         // 2. Vẽ các cạnh tuần tự tĩnh (edges) được lưu từ Graph Builder
         if (Array.isArray(workspaceData?.harness_config?.edges)) {
             workspaceData.harness_config.edges.forEach((edge: any) => {
+                const sourceState = getNodeState(edge.from);
+                const targetState = getNodeState(edge.to);
+
+                let strokeColor = theme === "dark" ? "#27272a" : "#e4e4e7";
+                let strokeWidth = 1.5;
+                let isAnimated = false;
+                let strokeDasharray = undefined;
+
+                if (sourceState === "DONE" && targetState === "DONE") {
+                    strokeColor = theme === "dark" ? "#10b981" : "#059669"; // Màu xanh lá cây hoàn thành
+                    strokeWidth = 2;
+                } else if (sourceState === "DONE" && (targetState === "RUNNING" || targetState === "VALIDATING")) {
+                    strokeColor = theme === "dark" ? "#00f0ff" : "#0ea5e9"; // Đang chuyển giao dở dang
+                    strokeWidth = 2.5;
+                    isAnimated = true;
+                } else if ((sourceState === "RUNNING" || sourceState === "VALIDATING") && targetState === "PENDING") {
+                    strokeColor = theme === "dark" ? "#6366f1" : "#4f46e5"; // Sắp chuyển giao
+                    strokeWidth = 1.5;
+                    isAnimated = true;
+                    strokeDasharray = "5,5";
+                }
+
                 edgesList.push({
                     id: `edge-flow-${edge.from}-${edge.to}`,
                     source: edge.from,
                     target: edge.to,
                     type: "smoothstep",
+                    animated: isAnimated,
                     style: {
-                        stroke: theme === "dark" ? "#27272a" : "#d4d4d8",
-                        strokeWidth: 1.5
+                        stroke: strokeColor,
+                        strokeWidth: strokeWidth,
+                        strokeDasharray: strokeDasharray
                     },
                     markerEnd: { type: MarkerType.ArrowClosed }
                 });
             });
         }
 
-        // 3. Vẽ các cạnh rẽ nhánh điều kiện (conditional_edges) thành Success (Green) và Failure (Red) rực rỡ
+        // 3. Vẽ các cạnh rẽ nhánh điều kiện (conditional_edges) rực rỡ và thay đổi trạng thái thông minh
         if (Array.isArray(workspaceData?.harness_config?.conditional_edges)) {
             workspaceData.harness_config.conditional_edges.forEach((ce: any) => {
                 if (ce.router) {
+                    const sourceState = getNodeState(ce.from);
+
                     if (ce.router.is_empty) {
+                        // ĐƯỜNG DẪN THÀNH CÔNG (SUCCESS PATH)
+                        const targetState = getNodeState(ce.router.is_empty);
+                        let strokeColor = theme === "dark" ? "#27272a" : "#e4e4e7"; // Mờ đi khi chưa chạy hoặc rẽ sang hướng khác
+                        let isAnimated = false;
+                        let strokeWidth = 1.5;
+
+                        if (sourceState === "DONE") {
+                            // Thành công! Tô màu xanh rực rỡ
+                            strokeColor = "#10b981";
+                            strokeWidth = 2.5;
+                            isAnimated = targetState === "RUNNING" || targetState === "VALIDATING";
+                        } else if (sourceState === "VALIDATING" || sourceState === "RUNNING") {
+                            strokeColor = theme === "dark" ? "#3f3f46" : "#a1a1aa";
+                        }
+
                         edgesList.push({
                             id: `edge-flow-cond-success-${ce.from}-${ce.router.is_empty}`,
                             source: ce.from,
                             target: ce.router.is_empty,
                             type: "smoothstep",
                             label: "✓ Success",
-                            animated: true,
-                            style: { stroke: '#10b981', strokeWidth: 2, strokeDasharray: '4,4' },
-                            labelStyle: { fill: '#10b981', fontWeight: 700, fontSize: 9 },
-                            labelBgStyle: { fill: theme === "dark" ? '#05050c' : '#f0fdf4', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1, rx: 4 },
+                            animated: isAnimated,
+                            style: {
+                                stroke: strokeColor,
+                                strokeWidth: strokeWidth,
+                                strokeDasharray: sourceState === "DONE" ? undefined : '4,4'
+                            },
+                            labelStyle: {
+                                fill: sourceState === "DONE" ? '#10b981' : (theme === "dark" ? "#71717a" : "#a1a1aa"),
+                                fontWeight: 700,
+                                fontSize: 9
+                            },
+                            labelBgStyle: {
+                                fill: theme === "dark" ? '#05050c' : '#f0fdf4',
+                                fillOpacity: 0.9,
+                                stroke: sourceState === "DONE" ? '#10b981' : (theme === "dark" ? "#27272a" : "#e4e4e7"),
+                                strokeWidth: 1,
+                                rx: 4
+                            },
                             markerEnd: { type: MarkerType.ArrowClosed }
                         });
                     }
+
                     if (ce.router.is_not_empty) {
+                        // ĐƯỜNG DẪN THẤT BẠI (FAILURE PATH)
+                        let strokeColor = theme === "dark" ? "#27272a" : "#e4e4e7"; // Mờ đi khi chưa chạy hoặc rẽ sang hướng khác
+                        let isAnimated = false;
+                        let strokeWidth = 1.5;
+
+                        if (sourceState === "FAILED" || sourceState === "BLOCKED") {
+                            // Lỗi xảy ra! Tô màu đỏ pulsing nổi bật
+                            strokeColor = "#ef4444";
+                            strokeWidth = 2.5;
+                            isAnimated = true;
+                        } else if (sourceState === "VALIDATING" || sourceState === "RUNNING") {
+                            strokeColor = theme === "dark" ? "#451a1a" : "#fca5a5";
+                        }
+
                         edgesList.push({
                             id: `edge-flow-cond-failure-${ce.from}-${ce.router.is_not_empty}`,
                             source: ce.from,
                             target: ce.router.is_not_empty,
                             type: "smoothstep",
                             label: "✗ Failure",
-                            animated: true,
-                            style: { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '4,4' },
-                            labelStyle: { fill: '#ef4444', fontWeight: 700, fontSize: 9 },
-                            labelBgStyle: { fill: theme === "dark" ? '#05050c' : '#fef2f2', fillOpacity: 0.9, stroke: '#ef4444', strokeWidth: 1, rx: 4 },
+                            animated: isAnimated,
+                            style: {
+                                stroke: strokeColor,
+                                strokeWidth: strokeWidth,
+                                strokeDasharray: (sourceState === "FAILED" || sourceState === "BLOCKED") ? undefined : '4,4'
+                            },
+                            labelStyle: {
+                                fill: (sourceState === "FAILED" || sourceState === "BLOCKED") ? '#ef4444' : (theme === "dark" ? "#71717a" : "#a1a1aa"),
+                                fontWeight: 700,
+                                fontSize: 9
+                            },
+                            labelBgStyle: {
+                                fill: theme === "dark" ? '#05050c' : '#fef2f2',
+                                fillOpacity: 0.9,
+                                stroke: (sourceState === "FAILED" || sourceState === "BLOCKED") ? '#ef4444' : (theme === "dark" ? "#27272a" : "#e4e4e7"),
+                                strokeWidth: 1,
+                                rx: 4
+                            },
                             markerEnd: { type: MarkerType.ArrowClosed }
                         });
                     }
