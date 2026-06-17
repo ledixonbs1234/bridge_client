@@ -27,17 +27,25 @@ export function TraceNodeInspector({
     isGenerating = false
 }: TraceNodeInspectorProps) {
     const modalScrollRef = useRef<HTMLDivElement>(null);
+    const hasScrolledToBottomRef = useRef<boolean>(false);
 
+    // Reset trạng thái cuộn khi chuyển sang node khác
     useEffect(() => {
-        if (selectedNode && modalScrollRef.current) {
+        hasScrolledToBottomRef.current = false;
+    }, [selectedNode?.id]);
+
+    // Chỉ cuộn xuống dưới cùng MỘT LẦN khi mở node
+    useEffect(() => {
+        if (selectedNode && modalScrollRef.current && !hasScrolledToBottomRef.current) {
             const timer = setTimeout(() => {
                 if (modalScrollRef.current) {
                     modalScrollRef.current.scrollTop = modalScrollRef.current.scrollHeight;
+                    hasScrolledToBottomRef.current = true;
                 }
             }, 60);
             return () => clearTimeout(timer);
         }
-    }, [selectedNode?.id, selectedNode?.data?.content]);
+    }, [selectedNode?.id]);
 
     const parsedSummaryList = useMemo(() => {
         if (!selectedNode || !selectedNode.data?.content) return null;
