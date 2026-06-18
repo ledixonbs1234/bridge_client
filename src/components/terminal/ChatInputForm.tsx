@@ -205,14 +205,15 @@ export const ChatInputForm = React.memo(function ChatInputForm({
         setShowCommandSuggest(false);
     };
 
-    const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
+    const handleSubmit = (e: React.FormEvent | React.KeyboardEvent, overrideInput?: string) => {
         e.preventDefault();
-        if ((!input.trim() && pastedImages.length === 0) || isGenerating) return;
+        const finalInput = overrideInput !== undefined ? overrideInput : input;
+        if ((!finalInput.trim() && pastedImages.length === 0) || isGenerating) return;
 
         const matchedOpt = enabledModelOptions.find(opt => opt.model === currentActiveModelName);
         const modelPayload = matchedOpt ? `${matchedOpt.provider}:${matchedOpt.model}` : undefined;
 
-        onSendMessage(input, useReformulate, useHeadless, pastedImages, chatMode, modelPayload, useGitIsolation, useGitFooter);
+        onSendMessage(finalInput, useReformulate, useHeadless, pastedImages, chatMode, modelPayload, useGitIsolation, useGitFooter);
         setInput('');
         setPastedImages([]);
         setShowCommandSuggest(false);
@@ -237,8 +238,9 @@ export const ChatInputForm = React.memo(function ChatInputForm({
             }
             if (e.key === 'Enter') {
                 e.preventDefault();
-                // Chọn lệnh autocomplete thay vì submit nhầm tin dở dang
-                handleCommandSelect(filteredSuggests[suggestIndex].cmd);
+                // Khi nhấn Enter: chọn lệnh và submit ngay lập tức để tránh phải nhấn 2 lần
+                const selectedCmd = filteredSuggests[suggestIndex].cmd;
+                handleSubmit(e, selectedCmd);
                 return;
             }
             if (e.key === 'Escape') {
