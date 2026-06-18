@@ -582,5 +582,5 @@ export function useSSE(onGenerationComplete?: () => void) {
     setPendingPermission(null);
   }, []);
 
-  return { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setMessages, setLogs, setPendingPermission };
+  return { messages, logs, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration, setMessages, setLogs, setPendingPermission }; 
 }

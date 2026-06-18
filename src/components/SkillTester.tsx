@@ -23,13 +23,13 @@ export function SkillTester({ sse, setReloadTrigger, theme = "light" }: SkillTes
   "type": "tool_call",
   "name": "replace_content_safe",
   "arguments": {
-    "file_path": "H:/DATA/JAVASCRIPT/EXTENSION/CCCD_HANHCHINHCONG/src/popup/popup.tsx",
+    "file_path": "src/popup/popup.tsx",
     "task_description": "Thêm hàm removeVietnameseTones, cập nhật nameOptions hiển thị vị trí và sửa logic tìm kiếm không dấu",
     "replacements": [
       {
         "start_line": 45,
         "end_line": 52,
-        "replacement_content": "  // Helper function to remove Vietnamese tones for search\\n  const removeVietnameseTones = (str: string) => {\\n    str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, \\"a\\\");\\n    str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, \\"e\\\");\\n    str = str.replace(/ì|í|ị|ỉ|ĩ/g, \\"i\\\");\\n    str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, \\"o\\\");\\n    str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, \\"u\\\");\\n    str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, \\"y\\\");\\n    str = str.replace(/đ/g, \\"d\\\");\\n    str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, \\"A\\\");\\n    str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, \\"E\\\");\\n    str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, \\"I\\\");\\n    str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, \\"O\\\");\\n    str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, \\"U\\\");\\n    str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, \\"Y\\\");\\n    str = str.replace(/Đ/g, \\"D\\\");\\n    str = str.replace(/\\\\u0300|\\\\u0301|\\\\u0303|\\\\u0309|\\\\u0323/g, \\"\\\");\\n    str = str.replace(/\\\\u02C6|\\\\u0306|\\\\u031B/g, \\"\\\");\\n    return str;\\n  };\\n\\n  // State cho tìm vị trí theo tên\\n  const [searchName, setSearchName] = useState(\\\"\\\");\\n  const [searchResult, setSearchResult] = useState<null | { index: number, cccd: any }>(null);\\n  \\n  // Gợi ý tên từ queueData, bao gồm cả vị trí\\n  const queueListForSearch = Object.values(queueData || {});\\n  const nameOptions = queueListForSearch\\n    .map((item: any, idx: number) => ({\\n      value: item.Name,\\n      label: \`\${item.Name} (Vị trí: \${idx + 1})\`,\\n      index: idx + 1,\\n      cccd: item\\n    }))\\n    .filter((item, i, arr) => item.value && arr.findIndex(t => t.value === item.value) === i);"
+        "replacement_content": "  // Helper function to remove Vietnamese tones for search\\n  const removeVietnameseTones = (str: string) => {\\n    return str;\\n  };"
       }
     ]
   }
@@ -53,6 +53,12 @@ export function SkillTester({ sse, setReloadTrigger, theme = "light" }: SkillTes
                 body: JSON.stringify({ rawText: rawInputText })
             });
 
+            // Nâng cấp: Kiểm tra kiểu dữ liệu trả về trước khi parse JSON để tránh lỗi "<!DOCTYPE"
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Mất kết nối tới Bridge Server. Hãy đảm bảo bạn đã khởi chạy server ở cổng 54321.");
+            }
+
             const data = await res.json();
             if (data.success) {
                 // 1. Tải lại lịch sử hội thoại thực tế từ Server
@@ -62,7 +68,7 @@ export function SkillTester({ sse, setReloadTrigger, theme = "light" }: SkillTes
                 // 2. Kích hoạt render lại sơ đồ với bối cảnh mới từ Server
                 setReloadTrigger((prev) => prev + 1);
 
-                alert("✓ Backend đã bóc tách, ghi nhận Database và đồng bộ sơ đồ thành công!");
+                alert("✓ Backend đã bóc tách, thực thi Tool, ghi nhận Database và đồng bộ sơ đồ thành công!");
             } else {
                 setSimError(data.error || "Gặp sự cố khi Backend phân tích dữ liệu.");
             }
@@ -80,7 +86,7 @@ export function SkillTester({ sse, setReloadTrigger, theme = "light" }: SkillTes
                     <span>🧪</span> Live Raw Decoder (Bản phân tích cú pháp biểu thức thô)
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed font-semibold">
-                    Hãy dán đoạn phản hồi dạng text thô của AI dưới đây (kèm các lệnh Gọi Tool, JSON thô, tham số...). Dữ liệu sẽ được gửi trực tiếp lên Backend để bóc tách, lưu vết vĩnh viễn và đồng bộ lên sơ đồ Visual Flow.
+                    Hãy dán đoạn phản hồi dạng text thô của AI dưới đây (kèm các lệnh Gọi Tool, JSON thô, tham số...). Dữ liệu sẽ được gửi trực tiếp lên Backend để bóc tách, thực thi trực tiếp trên sandbox và đồng bộ tức thời lên sơ đồ Visual Flow.
                 </p>
             </div>
 
@@ -105,7 +111,7 @@ export function SkillTester({ sse, setReloadTrigger, theme = "light" }: SkillTes
                         onChange={(e) => setRawInputText(e.target.value)}
                         disabled={isRunningSim}
                         rows={15}
-                        className={`w-full p-4 border rounded-xl text-xs font-mono outline-none leading-relaxed transition-colors ${isDark ? "bg-zinc-950 border-zinc-850 text-zinc-300 focus:border-zinc-700" : "bg-zinc-50 border-zinc-200 text-zinc-850 focus:border-zinc-300"}`}
+                        className={`w-full p-4 border rounded-xl text-xs font-mono outline-none leading-relaxed transition-colors ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-zinc-50 border-zinc-200 text-zinc-800 focus:border-zinc-300"}`}
                     />
 
                     <div className="flex justify-end select-none">
