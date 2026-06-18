@@ -143,7 +143,32 @@ const BuilderValidatorNode = React.memo(({ data, selected }: any) => {
 // =================================================================
 // ⚙️ FSM GRAPH TEMPLATES CONFIG
 // =================================================================
+// =================================================================
+// ⚙️ FSM GRAPH TEMPLATES CONFIG
+// =================================================================
 const FSM_TEMPLATES = {
+    tdd_coder: {
+        harness_name: "tdd_coder_flow",
+        description: "Quy trình TDD (Test-Driven): Phân tích, Viết Test, Viết Code, Kiểm duyệt Cú pháp, Linting, Test Coverage và Tự sửa lỗi.",
+        initial_node: "planner",
+        nodes: [
+            { id: "planner", type: "agent", x: 40, y: 150, name: "planner", model_mode: "fast", system_prompt: "Phân tích yêu cầu và định vị file cần sửa, file test.", tools: ["find_files", "find_content"] },
+            { id: "test_writer", type: "agent", x: 280, y: 150, name: "test_writer", model_mode: "fast", system_prompt: "Viết Unit Test trước khi code logic.", tools: ["read_file", "write_file", "replace_content_safe", "execute_terminal_command"] },
+            { id: "coder", type: "agent", x: 520, y: 150, name: "coder", model_mode: "fast", system_prompt: "Lập trình logic để pass test.", tools: ["read_file", "write_file", "replace_content_safe", "execute_terminal_command"] },
+            { id: "validator", type: "validator", x: 760, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "tester", next_on_failure: "healer" },
+            { id: "tester", type: "agent", x: 1000, y: 150, name: "tester", model_mode: "fast", system_prompt: "Chạy test và linter. Bắt buộc trả về json {'errors': []} hoặc chứa nội dung lỗi.", tools: ["run_advanced_tests", "run_automated_tests"] },
+            { id: "healer", type: "agent", x: 650, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Sửa lỗi code hoặc lỗi test dựa theo báo cáo.", tools: ["read_file", "replace_content_safe", "execute_terminal_command"] }
+        ],
+        edges: [
+            { id: "edge-planner-test_writer", source: "planner", target: "test_writer" },
+            { id: "edge-test_writer-coder", source: "test_writer", target: "coder" },
+            { id: "edge-coder-validator", source: "coder", target: "validator" },
+            { id: "edge-validator-tester", source: "validator", target: "tester", data: { pathType: "success" } },
+            { id: "edge-validator-healer", source: "validator", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-tester-healer", source: "tester", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-healer-validator", source: "healer", target: "validator" }
+        ]
+    },
     bug_fixer: {
         harness_name: "bug_fixer_flow",
         description: "Quy trình lặp tự động tìm lỗi, sửa mã nguồn, xác thực cú pháp và biên dịch vá lỗi [5]",
@@ -779,17 +804,27 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
         });
 
         nodes.forEach(n => {
-            if (n.data?.type === 'validator') {
-                const outEdges = edges.filter(e => e.source === n.id);
-                // CHỐT CHẶN HOÀN THIỆN
-                const hasSuccess = outEdges.some(e => e.data?.pathType === 'success') || n.data?.next_on_success === 'end';
-                const hasFailure = outEdges.some(e => e.data?.pathType === 'failure') || (n.data?.next_on_failure && n.data.next_on_failure !== "");
+            const outEdges = edges.filter(e => e.source === n.id);
+            const hasSuccess = outEdges.some(e => e.data?.pathType === 'success');
+            const hasFailure = outEdges.some(e => e.data?.pathType === 'failure');
+            const hasConditional = hasSuccess || hasFailure;
 
-                if (!hasSuccess) {
+            if (n.data?.type === 'validator') {
+                const finalSuccess = hasSuccess || n.data?.next_on_success === 'end';
+                const finalFailure = hasFailure || (n.data?.next_on_failure && n.data.next_on_failure !== "");
+
+                if (!finalSuccess) {
                     warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✓ Success" (hoặc đích đến thành công chưa được thiết lập là "end").`);
                 }
-                if (!hasFailure) {
+                if (!finalFailure) {
                     warnings.push(`⚠️ Validator "${n.id.toUpperCase()}" thiếu dây rẽ nhánh "✗ Failure" (Hãy nối dây tới Node xử lý lỗi).`);
+                }
+            } else if (hasConditional) {
+                if (!hasSuccess) {
+                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✓ Success".`);
+                }
+                if (!hasFailure) {
+                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✗ Failure".`);
                 }
             }
         });
@@ -798,11 +833,21 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
     }, [nodes, edges, entryPoint]);
 
     // Biên dịch thông minh: Ánh xạ rẽ nhánh Validator trực tiếp từ Edges
+    // Biên dịch thông minh: Ánh xạ rẽ nhánh Validator và Agent trực tiếp từ Edges
     const compileToJSON = () => {
         const compiledNodes: Record<string, any> = {};
+        const compiledEdges: any[] = [];
+        const conditionalEdges: any[] = [];
 
         nodes.forEach(n => {
             const d = n.data as EditableNodeData;
+
+            const outEdges = edges.filter(e => e.source === n.id);
+            const successEdge = outEdges.find(e => e.data?.pathType === 'success');
+            const failureEdge = outEdges.find(e => e.data?.pathType === 'failure');
+            const hasConditional = !!successEdge || !!failureEdge;
+
+            const defaultNextNode = outEdges.find(e => !e.data || e.data.pathType === 'default')?.target || null;
 
             if (d.type === 'agent') {
                 compiledNodes[n.id] = {
@@ -810,13 +855,13 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     system_prompt: d.system_prompt,
                     tools: d.tools,
                     model_mode: d.model_mode,
-                    include_global_prompt: d.include_global_prompt !== false // <-- Thêm dòng này
+                    include_global_prompt: d.include_global_prompt !== false
                 };
+                // Gắn next cho Agent nếu không có dây rẽ nhánh (dây mặc định)
+                if (!hasConditional && defaultNextNode) {
+                    compiledNodes[n.id].next = defaultNextNode;
+                }
             } else {
-                const outEdges = edges.filter(e => e.source === n.id);
-                const successEdge = outEdges.find(e => e.data?.pathType === 'success');
-                const failureEdge = outEdges.find(e => e.data?.pathType === 'failure');
-
                 const nextOnSuccess = successEdge ? successEdge.target : (d.next_on_success || "end");
                 const nextOnFailure = failureEdge ? failureEdge.target : (d.next_on_failure || "");
 
@@ -828,29 +873,18 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     next_on_failure: nextOnFailure
                 };
             }
-        });
 
-        const compiledEdges: any[] = [];
-        const conditionalEdges: any[] = [];
-
-        edges.forEach(e => {
-            const sourceNode = nodes.find(n => n.id === e.source);
-            const sourceData = sourceNode?.data as EditableNodeData;
-
-            if (sourceData && sourceData.type === 'validator') {
-                const alreadyExists = conditionalEdges.some(ce => ce.from === e.source);
+            // Xử lý tạo Edges & Conditional Edges
+            if (d.type === 'validator' || hasConditional) {
+                const alreadyExists = conditionalEdges.some(ce => ce.from === n.id);
                 if (!alreadyExists) {
-                    const outEdges = edges.filter(ed => ed.source === e.source);
-                    const successEdge = outEdges.find(ed => ed.data?.pathType === 'success');
-                    const failureEdge = outEdges.find(ed => ed.data?.pathType === 'failure');
-
-                    const is_empty = successEdge ? successEdge.target : (sourceData.next_on_success || "end");
-                    const is_not_empty = failureEdge ? failureEdge.target : (sourceData.next_on_failure || "");
+                    const is_empty = successEdge ? successEdge.target : (d.type === 'validator' ? d.next_on_success || "end" : "end");
+                    const is_not_empty = failureEdge ? failureEdge.target : (d.type === 'validator' ? d.next_on_failure || "" : "");
 
                     conditionalEdges.push({
-                        from: e.source,
+                        from: n.id,
                         condition_type: "state_check",
-                        state_key: "errors",
+                        state_key: "errors", // Theo dõi mảng lỗi (từ Coder hoặc Tester)
                         router: {
                             is_empty,
                             is_not_empty
@@ -858,9 +892,11 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     });
                 }
             } else {
-                compiledEdges.push({
-                    from: e.source,
-                    to: e.target
+                outEdges.forEach(e => {
+                    compiledEdges.push({
+                        from: e.source,
+                        to: e.target
+                    });
                 });
             }
         });
@@ -872,8 +908,10 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
             state_schema: {
                 task: "",
                 target_file: "",
+                test_file: "",
                 pending_code: "",
                 errors: [],
+                lint_warnings: [],
                 retry_count: 0,
                 next_node: ""
             },
@@ -997,6 +1035,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                                 }`}
                         >
                             <option value="" disabled>-- Chọn Sơ đồ mẫu --</option>
+                            <option value="tdd_coder">💻 Mẫu: TDD Coder Workflow</option>
                             <option value="bug_fixer">🐞 Mẫu: Bug-Fixer Loop</option>
                             <option value="security_scanner">🛡️ Mẫu: Secure-Scanner</option>
                             <option value="doc_generator">📖 Mẫu: Doc-Generator</option>
