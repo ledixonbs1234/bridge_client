@@ -251,6 +251,70 @@ function VisualFlowInner({
             currentStepMap.find(s => s.state === "PENDING")?.step_key ||
             initialNode;
 
+        // 🧠 THUẬT TOÁN MỚI: Mổ xẻ và chia tách timeline cho từng Node dựa trên System Event Markers
+        const nodeMessagesMap = new Map<string, any[]>();
+        const nodeUsageMap = new Map<string, any>();
+        let currentNodeContext = initialNode.toLowerCase();
+        let tempUserContent = "";
+
+        messages.forEach((msg, idxIdx) => {
+            if (msg.role === "user") {
+                tempUserContent = msg.content;
+            } else if (msg.role === "assistant") {
+                const timeline = msg.timeline || (msg.steps && msg.steps.length > 0 ? [{ id: `rec-${idxIdx}`, type: "steps", steps: msg.steps }] : []);
+
+                let currentTurnAccumulator: any[] = [];
+                let localNodeContext = currentNodeContext;
+
+                // Cắt timeline ra thành từng mảnh khi gặp cờ báo hiệu chuyển Node
+                timeline.forEach((item: any) => {
+                    if (item.type === 'text') {
+                        const match = item.content?.match(/(?:Bắt đầu kích hoạt Node:|Đang tự động kích hoạt kiểm duyệt cú pháp:)\s*\[(.*?)\]/i);
+                        if (match) {
+                            // Phát hiện chuyển Node -> Ghi lại mảng tích lũy cũ vào node cũ
+                            if (currentTurnAccumulator.length > 0) {
+                                const turns = nodeMessagesMap.get(localNodeContext) || [];
+                                const lastTurn = turns[turns.length - 1];
+                                if (lastTurn && lastTurn.query === tempUserContent) {
+                                    lastTurn.accumulator.push(...mapLiveTimelineToAccumulator(currentTurnAccumulator));
+                                } else {
+                                    turns.push({
+                                        query: tempUserContent || "(Không có prompt)",
+                                        accumulator: mapLiveTimelineToAccumulator(currentTurnAccumulator)
+                                    });
+                                }
+                                nodeMessagesMap.set(localNodeContext, turns);
+                                currentTurnAccumulator = []; // Reset bộ đệm cho node mới
+                            }
+                            localNodeContext = match[1].toLowerCase();
+                            currentNodeContext = localNodeContext; // Cập nhật context theo luồng thời gian
+                        }
+                    }
+                    currentTurnAccumulator.push(item);
+                });
+
+                // Đẩy bộ đệm còn sót lại cuối cùng vào Node hiện hành
+                if (currentTurnAccumulator.length > 0) {
+                    const turns = nodeMessagesMap.get(localNodeContext) || [];
+                    const lastTurn = turns[turns.length - 1];
+                    if (lastTurn && lastTurn.query === tempUserContent) {
+                        lastTurn.accumulator.push(...mapLiveTimelineToAccumulator(currentTurnAccumulator));
+                    } else {
+                        turns.push({
+                            query: tempUserContent || "(Không có prompt)",
+                            accumulator: mapLiveTimelineToAccumulator(currentTurnAccumulator)
+                        });
+                    }
+                    nodeMessagesMap.set(localNodeContext, turns);
+                }
+
+                if (msg.usage) {
+                    nodeUsageMap.set(localNodeContext, msg.usage);
+                }
+            }
+        });
+
+        // Áp dụng dữ liệu đã chia tách vào từng Node trên sơ đồ
         Object.entries(harnessNodesConfig).forEach(([nodeName, nodeVal]: [string, any], idx) => {
             const dbState = currentStepMap.find(s => s.step_key === nodeName);
             let stateString = "idle";
@@ -265,35 +329,31 @@ function VisualFlowInner({
             const isValidator = nodeVal.type === "validator";
             let content = dbState ? dbState.summary : "";
 
-            if (nodeName === activeNodeName && messages.length > 0) {
-                const turns: any[] = [];
-                let tempUserContent = "";
+            const lowerNodeName = nodeName.toLowerCase();
+            const mappedTurns = nodeMessagesMap.get(lowerNodeName) ? [...nodeMessagesMap.get(lowerNodeName)!] : [];
 
-                messages.forEach((msg, idxIdx) => {
-                    if (msg.role === "user") {
-                        tempUserContent = msg.content;
-                    } else if (msg.role === "assistant") {
-                        const timeline = msg.timeline || (msg.steps && msg.steps.length > 0 ? [{ id: `rec-${idxIdx}`, type: "steps", steps: msg.steps }] : []);
-                        const accum = mapLiveTimelineToAccumulator(timeline);
-                        turns.push({
-                            query: tempUserContent || "(Không có prompt)",
-                            accumulator: accum
-                        });
-                    }
-                });
-
-                if (messages[messages.length - 1]?.role === "user") {
-                    turns.push({
+            if (mappedTurns.length > 0) {
+                // Đảm bảo bám sát các câu lệnh của người dùng đang chat dở dang chưa có Assistant phản hồi
+                if (nodeName === activeNodeName && messages[messages.length - 1]?.role === "user") {
+                    mappedTurns.push({
                         query: messages[messages.length - 1].content,
                         accumulator: []
                     });
                 }
-
-                content = JSON.stringify(turns);
+                content = JSON.stringify(mappedTurns);
+            } else if (nodeName === activeNodeName && messages.length > 0 && messages[messages.length - 1]?.role === "user") {
+                content = JSON.stringify([{
+                    query: messages[messages.length - 1].content,
+                    accumulator: []
+                }]);
             }
 
+            // Gắn Tokens Usage chính xác theo từng node
             const activeAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
-            const activeUsage = activeAssistantMsg?.usage || null;
+            let nodeUsage = nodeUsageMap.get(lowerNodeName);
+            if (nodeName === activeNodeName && !nodeUsage) {
+                nodeUsage = activeAssistantMsg?.usage || null;
+            }
 
             nodesList.push({
                 id: nodeName,
@@ -305,7 +365,7 @@ function VisualFlowInner({
                     model: workspaceData.provider.model || "Local Engine",
                     state: stateString,
                     content: content,
-                    usage: nodeName === activeNodeName ? (activeUsage || undefined) : undefined
+                    usage: nodeUsage
                 },
                 position: {
                     x: lastUserMsg ? 100 + idx * 320 + 300 : 100 + idx * 320,
