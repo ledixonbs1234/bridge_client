@@ -218,7 +218,6 @@ function VisualFlowInner({
 
         const harnessNodesConfig = workspaceData.harness_config?.nodes || {};
         const nodeKeys = Object.keys(harnessNodesConfig);
-        console.log(`📦 [VisualFlow Sync] Số lượng cấu hình Nodes từ Backend: ${nodeKeys.length}`, nodeKeys);
 
         if (nodeKeys.length === 0) {
             console.error("🚨 [VisualFlow Sync] LỖI: Backend trả về harness_config.nodes RỖNG!");
@@ -519,25 +518,60 @@ function VisualFlowInner({
             });
         }
 
-        console.log(`✅ [VisualFlow Sync] Cập nhật Canvas với ${nodesList.length} Nodes và ${edgesList.length} Edges`);
+        // 1. CẬP NHẬT TỪNG PHẦN CHO NODES (Partial Update)
         setNodes((prevNodes) => {
-            const prevStr = JSON.stringify(prevNodes);
-            const nextStr = JSON.stringify(nodesList);
-            if (prevStr === nextStr) {
-                return prevNodes; // Dữ liệu không đổi -> Giữ nguyên, chặn re-render
+            // Nếu cấu trúc đồ thị thay đổi (thêm/bớt node), buộc phải render lại mảng mới
+            if (prevNodes.length === 0 || prevNodes.length !== nodesList.length) {
+                return nodesList;
             }
-            console.log(`✅ [VisualFlow Sync] Dữ liệu thay đổi -> Vẽ lại ${nodesList.length} Nodes`);
-            return nodesList;
+
+            let hasChanges = false;
+            const nextNodes = prevNodes.map(oldNode => {
+                const newNode = nodesList.find(n => n.id === oldNode.id);
+                if (!newNode) return oldNode;
+
+                // Chỉ so sánh data của riêng Node này
+                if (JSON.stringify(oldNode.data) !== JSON.stringify(newNode.data)) {
+                    hasChanges = true;
+                    console.log(`✅[VisualFlow Sync] Cập nhật Node mới `);
+                    // CHỈ tạo object mới cho Node bị thay đổi (giúp React biết để render lại Node này)
+                    return { ...oldNode, data: newNode.data };
+                }
+
+                // TRẢ VỀ ĐÚNG ĐỊA CHỈ BỘ NHỚ CŨ -> React.memo sẽ BỎ QUA, KHÔNG RENDER LẠI NODE NÀY
+                return oldNode;
+            });
+
+            // Nếu không có Node nào thay đổi data, chặn toàn bộ đợt render
+            return hasChanges ? nextNodes : prevNodes;
         });
 
+        // 2. CẬP NHẬT TỪNG PHẦN CHO EDGES (Partial Update)
         setEdges((prevEdges) => {
-            const prevStr = JSON.stringify(prevEdges);
-            const nextStr = JSON.stringify(edgesList);
-            if (prevStr === nextStr) {
-                return prevEdges;
+            if (prevEdges.length === 0 || prevEdges.length !== edgesList.length) {
+                return edgesList;
             }
-            return edgesList;
+
+            let hasChanges = false;
+            const nextEdges = prevEdges.map(oldEdge => {
+                const newEdge = edgesList.find(e => e.id === oldEdge.id);
+                if (!newEdge) return oldEdge;
+
+                // Chỉ kiểm tra hiệu ứng chạy (animated) và màu sắc (style)
+                if (oldEdge.animated !== newEdge.animated ||
+                    JSON.stringify(oldEdge.style) !== JSON.stringify(newEdge.style)) {
+                    hasChanges = true;
+                    console.log(`✅[VisualFlow Sync] Cập nhật Egle mới `);
+                    // Chỉ cập nhật Edge bị đổi màu hoặc đổi trạng thái chạy
+                    return { ...oldEdge, animated: newEdge.animated, style: newEdge.style };
+                }
+
+                return oldEdge;
+            });
+
+            return hasChanges ? nextEdges : prevEdges;
         });
+
     }, [messages, isGenerating, workspaceData, setNodes, setEdges, theme]);
 
     // Tự động căn chỉnh tối ưu toàn màn hình (fitView) khi có thay đổi cấu trúc sơ đồ
