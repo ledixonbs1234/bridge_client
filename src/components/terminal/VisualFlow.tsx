@@ -520,8 +520,24 @@ function VisualFlowInner({
         }
 
         console.log(`✅ [VisualFlow Sync] Cập nhật Canvas với ${nodesList.length} Nodes và ${edgesList.length} Edges`);
-        setNodes(nodesList);
-        setEdges(edgesList);
+        setNodes((prevNodes) => {
+            const prevStr = JSON.stringify(prevNodes);
+            const nextStr = JSON.stringify(nodesList);
+            if (prevStr === nextStr) {
+                return prevNodes; // Dữ liệu không đổi -> Giữ nguyên, chặn re-render
+            }
+            console.log(`✅ [VisualFlow Sync] Dữ liệu thay đổi -> Vẽ lại ${nodesList.length} Nodes`);
+            return nodesList;
+        });
+
+        setEdges((prevEdges) => {
+            const prevStr = JSON.stringify(prevEdges);
+            const nextStr = JSON.stringify(edgesList);
+            if (prevStr === nextStr) {
+                return prevEdges;
+            }
+            return edgesList;
+        });
     }, [messages, isGenerating, workspaceData, setNodes, setEdges, theme]);
 
     // Tự động căn chỉnh tối ưu toàn màn hình (fitView) khi có thay đổi cấu trúc sơ đồ
@@ -554,7 +570,7 @@ function VisualFlowInner({
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
-                    onNodesChange={handleNodesChange} 
+                    onNodesChange={handleNodesChange}
                     onEdgesChange={onEdgesChange}
                     nodeTypes={nodeTypes}
                     onNodeClick={(_, node) => setSelectedNode(node)}
