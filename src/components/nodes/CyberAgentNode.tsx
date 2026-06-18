@@ -21,11 +21,12 @@ interface CyberAgentNodeProps {
 export const CyberAgentNode = React.memo(({ data }: CyberAgentNodeProps) => {
     // Log giám sát dữ liệu Node đang được vẽ để phục vụ debug
     React.useEffect(() => {
-        console.log(`[CyberAgentNode Debug] Node ${data.name} state updated:`, {
-            state: data.state,
-            hasUsage: !!data.usage,
-            usageDetails: data.usage
-        });
+        console.log(`[CyberAgentNode Debug] 🟢 Node MOUNTED/UPDATED: ${data.name} | State:`, data.state);
+
+        // Hàm cleanup chạy khi Node bị xóa khỏi DOM
+        return () => {
+            console.warn(`[CyberAgentNode Debug] 🔴 Node UNMOUNTED (Biến mất): ${data.name}`);
+        };
     }, [data.name, data.state, data.usage]);
 
     const isDark = data.theme !== 'light';

@@ -1,6 +1,6 @@
 // filepath: bridge_client/src/components/terminal/VisualFlow.tsx
 import * as React from "react";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactFlow, {
     Background,
     Controls,
@@ -125,6 +125,14 @@ function VisualFlowInner({
     });
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    // Bắt log khi React Flow tự động xóa node
+    const handleNodesChange = useCallback((changes: any) => {
+        const removals = changes.filter((c: any) => c.type === 'remove');
+        if (removals.length > 0) {
+            console.warn("🚨 [VisualFlow Debug] ReactFlow đang tự động XÓA nodes:", removals);
+        }
+        onNodesChange(changes);
+    }, [onNodesChange]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const structuredQuestions = useMemo(() => {
         if (!pendingPermission?.details) return null;
@@ -201,14 +209,27 @@ function VisualFlowInner({
 
     // ĐỒNG BỘ ĐỒ THỊ KHI ĐANG CHẠY THỜI GIAN THỰC
     useEffect(() => {
-        if (!workspaceData) return;
+        console.log("🔍 [VisualFlow Sync] Triggered. workspaceData có không?", !!workspaceData);
+
+        if (!workspaceData) {
+            console.log("⚠️ [VisualFlow Sync] Bỏ qua vì workspaceData null/undefined");
+            return;
+        }
+
+        const harnessNodesConfig = workspaceData.harness_config?.nodes || {};
+        const nodeKeys = Object.keys(harnessNodesConfig);
+        console.log(`📦 [VisualFlow Sync] Số lượng cấu hình Nodes từ Backend: ${nodeKeys.length}`, nodeKeys);
+
+        if (nodeKeys.length === 0) {
+            console.error("🚨 [VisualFlow Sync] LỖI: Backend trả về harness_config.nodes RỖNG!");
+        }
 
         const nodesList: any[] = [];
         const edgesList: any[] = [];
 
         const currentStepMap = workspaceData.states || [];
         const runningStepKey = workspaceData.activeTask?.step_key || "";
-        const harnessNodesConfig = workspaceData.harness_config?.nodes || {};
+        // const harnessNodesConfig = workspaceData.harness_config?.nodes || {};
         const initialNode = workspaceData.harness_config?.initial_node || "planner";
 
         const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
@@ -498,9 +519,9 @@ function VisualFlowInner({
             });
         }
 
+        console.log(`✅ [VisualFlow Sync] Cập nhật Canvas với ${nodesList.length} Nodes và ${edgesList.length} Edges`);
         setNodes(nodesList);
         setEdges(edgesList);
-
     }, [messages, isGenerating, workspaceData, setNodes, setEdges, theme]);
 
     // Tự động căn chỉnh tối ưu toàn màn hình (fitView) khi có thay đổi cấu trúc sơ đồ
@@ -533,7 +554,7 @@ function VisualFlowInner({
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
-                    onNodesChange={onNodesChange}
+                    onNodesChange={handleNodesChange} 
                     onEdgesChange={onEdgesChange}
                     nodeTypes={nodeTypes}
                     onNodeClick={(_, node) => setSelectedNode(node)}
