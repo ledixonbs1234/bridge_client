@@ -4,3 +4,4 @@ export { CyberUserNode } from "./CyberUserNode";
 export { CyberAgentNode } from "./CyberAgentNode";
 export { CyberToolNode } from "./CyberToolNode";
 export { CyberValidatorNode } from "./CyberValidatorNode";
+export { CyberEndNode } from "./CyberEndNode";

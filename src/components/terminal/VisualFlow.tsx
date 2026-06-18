@@ -26,7 +26,8 @@ import {
     CyberUserNode,
     CyberAgentNode,
     CyberToolNode,
-    CyberValidatorNode
+    CyberValidatorNode,
+    CyberEndNode
 } from "../nodes";
 
 
@@ -68,7 +69,8 @@ function VisualFlowInner({
         cyberAgent: CyberAgentNode,
         cyberTool: CyberToolNode,
         cyberValidator: CyberValidatorNode,
-        cyberGroup: CyberGroupNode
+        cyberGroup: CyberGroupNode,
+        cyberEnd: CyberEndNode
     }), []);
     const { messages, pendingPermission, isGenerating, sendPrompt, respondToPermission, stopGeneration } = sse;
 

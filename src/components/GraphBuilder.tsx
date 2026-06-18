@@ -17,7 +17,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "./animate-ui/button";
-
+import { CyberEndNode } from "./nodes/CyberEndNode";
 // Định nghĩa hàm toSafeId xử lý chuẩn hóa tên tiếng Việt phía client
 function toSafeId(text: string): string {
     if (!text) return "";
@@ -147,17 +147,43 @@ const BuilderValidatorNode = React.memo(({ data, selected }: any) => {
 // ⚙️ FSM GRAPH TEMPLATES CONFIG
 // =================================================================
 const FSM_TEMPLATES = {
+    full_e2e_coder: {
+        harness_name: "full_e2e_coder_flow",
+        description: "Quy trình Toàn diện: Phân tích, Code, Kiểm duyệt Cú pháp, Unit Test, và KHỞI CHẠY APP THỰC TẾ ĐỂ CLICK TEST UI.",
+        initial_node: "planner",
+        nodes: [
+            { id: "planner", type: "agent", x: 40, y: 150, name: "planner", model_mode: "fast", system_prompt: "Phân tích yêu cầu và định vị file cần sửa.", tools: ["find_files", "find_content"] },
+            { id: "coder", type: "agent", x: 280, y: 150, name: "coder", model_mode: "fast", system_prompt: "Lập trình logic đáp ứng yêu cầu mới.", tools: ["read_file", "write_file", "replace_content_safe", "execute_terminal_command"] },
+            { id: "validator", type: "validator", x: 520, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "unit_tester", next_on_failure: "healer" },
+            { id: "unit_tester", type: "agent", x: 760, y: 150, name: "unit_tester", model_mode: "fast", system_prompt: "Chạy các bài Unit test. Bắt buộc trả về json {'errors': []} hoặc danh sách lỗi.", tools: ["run_automated_tests", "run_advanced_tests"] },
+            { id: "e2e_tester", type: "agent", x: 1000, y: 150, name: "e2e_tester", model_mode: "thinking", system_prompt: "Khởi chạy app ngầm, sau đó dùng công cụ điều khiển (Browser/Desktop) để bấm click thử tính năng. Tắt app khi xong. Trả về JSON {'errors': []} hoặc chứa lỗi.", tools: ["execute_terminal_command", "stop_terminal_process", "dynamic_browser_controller", "debug_desktop_app"] },
+            { id: "healer", type: "agent", x: 650, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Khắc phục lỗi biên dịch, lỗi Unit Test, hoặc lỗi Runtime UI do tester trả về.", tools: ["read_file", "replace_content_safe", "execute_terminal_command"] },
+            { id: "end", type: "cyberEnd", x: 1240, y: 155 } // <--- NÚT END TRỰC QUAN
+        ],
+        edges: [
+            { id: "edge-planner-coder", source: "planner", target: "coder" },
+            { id: "edge-coder-validator", source: "coder", target: "validator" },
+            { id: "edge-validator-unit", source: "validator", target: "unit_tester", data: { pathType: "success" } },
+            { id: "edge-validator-healer", source: "validator", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-unit-e2e", source: "unit_tester", target: "e2e_tester", data: { pathType: "success" } },
+            { id: "edge-unit-healer", source: "unit_tester", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-e2e-end", source: "e2e_tester", target: "end", data: { pathType: "success" } }, // <--- NỐI DÂY THÀNH CÔNG VỀ END FLOW
+            { id: "edge-e2e-healer", source: "e2e_tester", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-healer-validator", source: "healer", target: "validator" }
+        ]
+    },
     tdd_coder: {
         harness_name: "tdd_coder_flow",
         description: "Quy trình TDD (Test-Driven): Phân tích, Viết Test, Viết Code, Kiểm duyệt Cú pháp, Linting, Test Coverage và Tự sửa lỗi.",
         initial_node: "planner",
         nodes: [
             { id: "planner", type: "agent", x: 40, y: 150, name: "planner", model_mode: "fast", system_prompt: "Phân tích yêu cầu và định vị file cần sửa, file test.", tools: ["find_files", "find_content"] },
-            { id: "test_writer", type: "agent", x: 280, y: 150, name: "test_writer", model_mode: "fast", system_prompt: "Viết Unit Test trước khi code logic.", tools: ["read_file", "write_file", "replace_content_safe", "execute_terminal_command"] },
-            { id: "coder", type: "agent", x: 520, y: 150, name: "coder", model_mode: "fast", system_prompt: "Lập trình logic để pass test.", tools: ["read_file", "write_file", "replace_content_safe", "execute_terminal_command"] },
+            { id: "test_writer", type: "agent", x: 280, y: 150, name: "test_writer", model_mode: "fast", system_prompt: "Viết Unit Test trước khi code logic.", tools: ["read_file", "write_file", "replace_content_safe"] },
+            { id: "coder", type: "agent", x: 520, y: 150, name: "coder", model_mode: "fast", system_prompt: "Lập trình logic để pass test.", tools: ["read_file", "write_file", "replace_content_safe"] },
             { id: "validator", type: "validator", x: 760, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "tester", next_on_failure: "healer" },
-            { id: "tester", type: "agent", x: 1000, y: 150, name: "tester", model_mode: "fast", system_prompt: "Chạy test và linter. Bắt buộc trả về json {'errors': []} hoặc chứa nội dung lỗi.", tools: ["run_advanced_tests", "run_automated_tests"] },
-            { id: "healer", type: "agent", x: 650, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Sửa lỗi code hoặc lỗi test dựa theo báo cáo.", tools: ["read_file", "replace_content_safe", "execute_terminal_command"] }
+            { id: "tester", type: "agent", x: 1000, y: 150, name: "tester", model_mode: "fast", system_prompt: "Chạy test và linter. Bắt buộc trả về json {'errors': []} hoặc chứa lỗi.", tools: ["run_advanced_tests"] },
+            { id: "healer", type: "agent", x: 650, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Sửa lỗi code hoặc lỗi test.", tools: ["read_file", "replace_content_safe"] },
+            { id: "end", type: "cyberEnd", x: 1240, y: 155 } // <--- NÚT END TRỰC QUAN
         ],
         edges: [
             { id: "edge-planner-test_writer", source: "planner", target: "test_writer" },
@@ -165,54 +191,61 @@ const FSM_TEMPLATES = {
             { id: "edge-coder-validator", source: "coder", target: "validator" },
             { id: "edge-validator-tester", source: "validator", target: "tester", data: { pathType: "success" } },
             { id: "edge-validator-healer", source: "validator", target: "healer", data: { pathType: "failure" } },
+            { id: "edge-tester-end", source: "tester", target: "end", data: { pathType: "success" } }, // <--- NỐI DÂY THÀNH CÔNG VỀ END FLOW
             { id: "edge-tester-healer", source: "tester", target: "healer", data: { pathType: "failure" } },
             { id: "edge-healer-validator", source: "healer", target: "validator" }
         ]
     },
     bug_fixer: {
         harness_name: "bug_fixer_flow",
-        description: "Quy trình lặp tự động tìm lỗi, sửa mã nguồn, xác thực cú pháp và biên dịch vá lỗi [5]",
+        description: "Quy trình lặp tự động tìm lỗi, sửa mã nguồn, xác thực cú pháp và biên dịch vá lỗi.",
         initial_node: "planner",
         nodes: [
             { id: "planner", type: "agent", x: 80, y: 150, name: "planner", model_mode: "fast", system_prompt: "Phân tích yêu cầu và định vị file nguồn.", tools: ["find_files", "find_content"] },
             { id: "coder", type: "agent", x: 340, y: 150, name: "coder", model_mode: "fast", system_prompt: "Nhận kế hoạch và viết code thay thế.", tools: ["replace_content_safe", "write_file"] },
             { id: "validator", type: "validator", x: 600, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "end", next_on_failure: "healer" },
-            { id: "healer", type: "agent", x: 340, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Sửa lỗi biên dịch do validator trả về.", tools: ["replace_content_safe"] }
+            { id: "healer", type: "agent", x: 340, y: 350, name: "healer", model_mode: "thinking", system_prompt: "Sửa lỗi biên dịch do validator trả về.", tools: ["replace_content_safe"] },
+            { id: "end", type: "cyberEnd", x: 840, y: 155 } // <--- NÚT END TRỰC QUAN
         ],
         edges: [
             { id: "edge-planner-coder", source: "planner", target: "coder" },
             { id: "edge-coder-validator", source: "coder", target: "validator" },
+            { id: "edge-validator-end", source: "validator", target: "end", data: { pathType: "success" } }, // <--- NỐI DÂY THÀNH CÔNG VỀ END FLOW
             { id: "edge-validator-healer", source: "validator", target: "healer", data: { pathType: "failure" } },
             { id: "edge-healer-coder", source: "healer", target: "coder" }
         ]
     },
     security_scanner: {
         harness_name: "security_scanner_flow",
-        description: "Quy trình tự động quét tĩnh mã nguồn bảo mật và vá các lỗ hổng nghiêm trọng [5]",
+        description: "Quy trình tự động quét tĩnh mã nguồn bảo mật và vá các lỗ hổng nghiêm trọng.",
         initial_node: "auditor",
         nodes: [
             { id: "auditor", type: "agent", x: 100, y: 150, name: "auditor", model_mode: "fast", system_prompt: "Quét file nguồn tìm các lỗ hổng (SQLi, Command Injection).", tools: ["read_file"] },
             { id: "patcher", type: "agent", x: 380, y: 150, name: "patcher", model_mode: "thinking", system_prompt: "Tiến hành vá bảo mật mã nguồn.", tools: ["replace_content_safe"] },
-            { id: "validator", type: "validator", x: 650, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "end", next_on_failure: "patcher" }
+            { id: "validator", type: "validator", x: 650, y: 150, name: "validator", target_file_key: "target_file", next_on_success: "end", next_on_failure: "patcher" },
+            { id: "end", type: "cyberEnd", x: 890, y: 155 } // <--- NÚT END TRỰC QUAN
         ],
         edges: [
             { id: "edge-auditor-patcher", source: "auditor", target: "patcher" },
             { id: "edge-patcher-validator", source: "patcher", target: "validator" },
+            { id: "edge-validator-end", source: "validator", target: "end", data: { pathType: "success" } }, // <--- NỐI DÂY THÀNH CÔNG VỀ END FLOW
             { id: "edge-validator-patcher", source: "validator", target: "patcher", data: { pathType: "failure" } }
         ]
     },
     doc_generator: {
         harness_name: "doc_generator_flow",
-        description: "Quy trình quét cấu trúc thư mục, sinh tài liệu Markdown API và soát chính tả lỗi văn phong [5]",
+        description: "Quy trình quét cấu trúc thư mục, sinh tài liệu Markdown API và soát chính tả lỗi văn phong.",
         initial_node: "inspector",
         nodes: [
             { id: "inspector", type: "agent", x: 80, y: 150, name: "inspector", model_mode: "fast", system_prompt: "Khảo sát và trích xuất cấu trúc thư mục dự án.", tools: ["list_directory"] },
             { id: "drafter", type: "agent", x: 340, y: 150, name: "drafter", model_mode: "fast", system_prompt: "Biên soạn dự thảo tài liệu Markdown API.", tools: ["read_file"] },
-            { id: "proofreader", type: "validator", x: 600, y: 150, name: "proofreader", target_file_key: "target_file", next_on_success: "end", next_on_failure: "drafter" }
+            { id: "proofreader", type: "validator", x: 600, y: 150, name: "proofreader", target_file_key: "target_file", next_on_success: "end", next_on_failure: "drafter" },
+            { id: "end", type: "cyberEnd", x: 840, y: 155 } // <--- NÚT END TRỰC QUAN
         ],
         edges: [
             { id: "edge-inspector-drafter", source: "inspector", target: "drafter" },
             { id: "edge-drafter-proofreader", source: "drafter", target: "proofreader" },
+            { id: "edge-proofreader-end", source: "proofreader", target: "end", data: { pathType: "success" } }, // <--- NỐI DÂY THÀNH CÔNG VỀ END FLOW
             { id: "edge-proofreader-drafter", source: "proofreader", target: "drafter", data: { pathType: "failure" } }
         ]
     }
@@ -221,7 +254,8 @@ const FSM_TEMPLATES = {
 export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: GraphBuilderProps) {
     const nodeTypes = useMemo(() => ({
         agent: BuilderAgentNode,
-        validator: BuilderValidatorNode
+        validator: BuilderValidatorNode,
+        cyberEnd: CyberEndNode
     }), []);
     const [harnessName, setHarnessName] = useState("custom_agent_workflow");
     const [description, setDescription] = useState("Mô tả quy trình tự động hóa...");
@@ -695,27 +729,35 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
         e.target.value = "";
     };
 
-    const handleAddNode = (type: "agent" | "validator", customX?: number, customY?: number) => {
-        const id = `${type}_${Date.now().toString().substring(8)}`;
+    const handleAddNode = (type: "agent" | "validator" | "cyberEnd", customX?: number, customY?: number) => {
+        // Chốt chặn bảo vệ: Chỉ cho phép duy nhất một Node Kết thúc (End Flow) trên canvas
+        if (type === "cyberEnd" && nodes.some(n => n.id === "end")) {
+            alert("⚠️ Sơ đồ chỉ cho phép tồn tại tối đa một Node Kết thúc (End Flow). Hãy nối các dây rẽ nhánh thành công về Node End hiện có trên màn hình!");
+            return;
+        }
+
+        const id = type === "cyberEnd" ? "end" : `${type}_${Date.now().toString().substring(8)}`;
         const newNode: Node = {
             id,
             position: { x: customX || 250, y: customY || 200 },
-            type: type,
+            type: type === "cyberEnd" ? "cyberEnd" : type,
             data: type === 'agent' ? {
                 name: id,
                 type: "agent",
                 system_prompt: "Chỉ thị hệ thống cho Agent mới...",
                 tools: [],
                 model_mode: "fast",
-                include_global_prompt: true, // <-- Thêm dòng này
+                include_global_prompt: true,
                 theme: theme
-            } : {
+            } : type === 'validator' ? {
                 name: id,
                 type: "validator",
                 target_file_key: "target_file",
                 next_on_success: "end",
                 next_on_failure: "",
                 theme: theme
+            } : {
+                theme: theme // data cho cyberEnd
             }
         };
 
@@ -748,8 +790,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
         if (dragType.startsWith("template:")) {
             const templateName = dragType.replace("template:", "");
             handleAddNodeFromTemplate(templateName, x, y);
-        } else if (dragType === "agent" || dragType === "validator") {
-            handleAddNode(dragType, x, y);
+        } else if (dragType === "agent" || dragType === "validator" || dragType === "cyberEnd") {
+            handleAddNode(dragType as any, x, y); // <--- Hỗ trợ drop thêm cyberEnd
         }
     };
 
@@ -804,6 +846,9 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
         });
 
         nodes.forEach(n => {
+            // Bỏ qua kiểm tra Linter đối với Node Kết thúc (End Flow) vì nó là đích cuối cùng
+            if (n.type === "cyberEnd" || n.id === "end") return;
+
             const outEdges = edges.filter(e => e.source === n.id);
             const hasSuccess = outEdges.some(e => e.data?.pathType === 'success');
             const hasFailure = outEdges.some(e => e.data?.pathType === 'failure');
@@ -821,10 +866,10 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                 }
             } else if (hasConditional) {
                 if (!hasSuccess) {
-                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✓ Success".`);
+                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✓ Success" (Hãy kéo dây về nút END FLOW).`);
                 }
                 if (!hasFailure) {
-                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✗ Failure".`);
+                    warnings.push(`⚠️ Agent "${n.id.toUpperCase()}" có rẽ nhánh điều kiện nhưng thiếu dây "✗ Failure" (Hãy nối dây tới Node xử lý lỗi).`);
                 }
             }
         });
@@ -834,14 +879,17 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
 
     // Biên dịch thông minh: Ánh xạ rẽ nhánh Validator trực tiếp từ Edges
     // Biên dịch thông minh: Ánh xạ rẽ nhánh Validator và Agent trực tiếp từ Edges
+    // Biên dịch thông minh: Ánh xạ rẽ nhánh Validator và Agent trực tiếp từ Edges về Node End vật lý
     const compileToJSON = () => {
         const compiledNodes: Record<string, any> = {};
         const compiledEdges: any[] = [];
         const conditionalEdges: any[] = [];
 
         nodes.forEach(n => {
-            const d = n.data as EditableNodeData;
+            // BỎ QUA KHÔNG BIÊN DỊCH NODE END THÀNH WORKER AGENT
+            if (n.type === "cyberEnd" || n.id === "end") return;
 
+            const d = n.data as EditableNodeData;
             const outEdges = edges.filter(e => e.source === n.id);
             const successEdge = outEdges.find(e => e.data?.pathType === 'success');
             const failureEdge = outEdges.find(e => e.data?.pathType === 'failure');
@@ -857,9 +905,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     model_mode: d.model_mode,
                     include_global_prompt: d.include_global_prompt !== false
                 };
-                // Gắn next cho Agent nếu không có dây rẽ nhánh (dây mặc định)
                 if (!hasConditional && defaultNextNode) {
-                    compiledNodes[n.id].next = defaultNextNode;
+                    compiledNodes[n.id].next = defaultNextNode === "end" ? "end" : defaultNextNode;
                 }
             } else {
                 const nextOnSuccess = successEdge ? successEdge.target : (d.next_on_success || "end");
@@ -869,8 +916,8 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     type: "validator",
                     validation_rule: "syntax_only",
                     target_file_key: d.target_file_key || "target_file",
-                    next_on_success: nextOnSuccess,
-                    next_on_failure: nextOnFailure
+                    next_on_success: nextOnSuccess === "end" ? "end" : nextOnSuccess,
+                    next_on_failure: nextOnFailure === "end" ? "end" : nextOnFailure
                 };
             }
 
@@ -884,10 +931,10 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                     conditionalEdges.push({
                         from: n.id,
                         condition_type: "state_check",
-                        state_key: "errors", // Theo dõi mảng lỗi (từ Coder hoặc Tester)
+                        state_key: "errors",
                         router: {
-                            is_empty,
-                            is_not_empty
+                            is_empty: is_empty === "end" ? "end" : is_empty,
+                            is_not_empty: is_not_empty === "end" ? "end" : is_not_empty
                         }
                     });
                 }
@@ -895,7 +942,7 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                 outEdges.forEach(e => {
                     compiledEdges.push({
                         from: e.source,
-                        to: e.target
+                        to: e.target === "end" ? "end" : e.target
                     });
                 });
             }
@@ -1035,12 +1082,12 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                                 }`}
                         >
                             <option value="" disabled>-- Chọn Sơ đồ mẫu --</option>
+                            <option value="full_e2e_coder">🚀 Mẫu: Full E2E & UI Tester</option>  {/* <--- THÊM DÒNG NÀY */}
                             <option value="tdd_coder">💻 Mẫu: TDD Coder Workflow</option>
                             <option value="bug_fixer">🐞 Mẫu: Bug-Fixer Loop</option>
                             <option value="security_scanner">🛡️ Mẫu: Secure-Scanner</option>
                             <option value="doc_generator">📖 Mẫu: Doc-Generator</option>
                         </select>
-
                         <button
                             type="button"
                             onClick={handleImportJSONClick}
@@ -1113,6 +1160,15 @@ export function GraphBuilder({ onSaveSuccess, editConfig, theme = "light" }: Gra
                                 title="Kéo thả Validator mặc định"
                             >
                                 <span>🛡️</span> Validator
+                            </div>
+                            <div
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, "cyberEnd")}
+                                className={`px-3 py-2 border rounded-lg text-xs font-mono font-bold cursor-grab active:cursor-grabbing flex items-center gap-1.5 shadow-3xs transition-colors ${isDark ? "bg-red-950/20 border-red-900/60 text-red-400 hover:bg-red-900/10" : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                    }`}
+                                title="Kéo thả Node kết thúc quy trình"
+                            >
+                                <span>🛑</span> End Flow
                             </div>
 
                             {/* Render danh sách Agent cá nhân đã lưu */}
